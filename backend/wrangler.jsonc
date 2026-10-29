@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "waymate-backend",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-28",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "ENVIRONMENT": "development",
+    "API_VERSION": "v1"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "waymate-d1",
+      "database_id": "058dd425-7611-4987-a379-7a40a8ab97d2",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "traces": {
+      "enabled": true
+    }
+  }
+}

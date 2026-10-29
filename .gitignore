@@ -1,15 +1,49 @@
 *.iml
 .gradle
 /local.properties
+local.properties
+
+# Build outputs
+/build
+build/
+*.apk
+*.aab
+*.dex
+
+# Android Studio / IntelliJ IDEA
 /.idea/caches
 /.idea/libraries
 /.idea/modules.xml
 /.idea/workspace.xml
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
+/.idea/deploymentTargetSelector.xml
+/.idea/deploymentTargetDropDown.xml
+/.idea/render.experimental.xml
+/.idea/vcs.xml
+
+# System & capture files
 .DS_Store
-/build
 /captures
 .externalNativeBuild
 .cxx
-local.properties
+
+# Keystores & signing
+*.jks
+*.keystore
+
+# Secrets & environment
+.env*
+secrets.properties
+
+# External and scratch references
+/Atak project
+
+# Backend (Cloudflare Workers) & Wrangler
+node_modules/
+/backend/node_modules/
+.wrangler/
+/backend/.wrangler/
+/backend/dist/
+/backend/.dev.vars
+

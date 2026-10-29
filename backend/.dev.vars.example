@@ -1,0 +1,2 @@
+# Local development environment secrets (DO NOT COMMIT ACTUAL .dev.vars)
+JWT_SECRET="waymate-tactical-dev-insecure-secret-key-32bytes-min"
