@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -98,7 +99,11 @@ fun TacticalCommunicationsSection(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp)
+                ) {
                     Text(
                         text = "ارتباطات و وضعیت عملیاتی (فاز ۸ و ۱۰)",
                         style = MaterialTheme.typography.titleMedium,
@@ -140,7 +145,11 @@ fun TacticalCommunicationsSection(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp)
+                    ) {
                         Text(
                             text = "${uiState.offlineQueueCount} عملیات در صف آفلاین محلی",
                             style = MaterialTheme.typography.bodySmall,
@@ -156,7 +165,8 @@ fun TacticalCommunicationsSection(
                     TacticalOutlinedButton(
                         text = if (uiState.isSyncing) "در حال ارسال..." else "همگام‌سازی",
                         onClick = onSyncQueue,
-                        enabled = !uiState.isSyncing
+                        enabled = !uiState.isSyncing,
+                        modifier = Modifier.wrapContentWidth()
                     )
                 }
             }
@@ -323,7 +333,8 @@ fun TacticalCommunicationsSection(
                                     isComposeVisible = false
                                 }
                             },
-                            enabled = draftMessageText.isNotBlank()
+                            enabled = draftMessageText.isNotBlank(),
+                            modifier = Modifier.wrapContentWidth()
                         )
                     }
                 }
@@ -530,7 +541,8 @@ private fun TacticalMessageCard(
                 ) {
                     TacticalOutlinedButton(
                         text = "مشاهده شد / تایید دریافت",
-                        onClick = onAcknowledge
+                        onClick = onAcknowledge,
+                        modifier = Modifier.wrapContentWidth()
                     )
                 }
             }
@@ -562,7 +574,11 @@ private fun LiveUnitStatusRow(unit: TeamLiveStatus) {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 8.dp)
+        ) {
             Text(
                 text = "${unit.teamName} (${unit.callsign})",
                 style = MaterialTheme.typography.bodySmall,

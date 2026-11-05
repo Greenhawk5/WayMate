@@ -204,4 +204,15 @@ class InMemoryOfflineStorageTest {
         assertEquals(0, storage.getPendingActionCount())
         assertEquals(0, storage.getCachedTeams().size)
     }
+
+    @Test
+    fun operationalStatus_saveAndRetrieve() = runBlocking {
+        assertEquals(null, storage.getMyOperationalStatus())
+
+        storage.saveMyOperationalStatus(OperationalStatus.PURSUING)
+        assertEquals(OperationalStatus.PURSUING, storage.getMyOperationalStatus())
+
+        storage.saveMyOperationalStatus(OperationalStatus.ENGAGED)
+        assertEquals(OperationalStatus.ENGAGED, storage.getMyOperationalStatus())
+    }
 }

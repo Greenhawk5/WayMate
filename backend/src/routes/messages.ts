@@ -135,24 +135,38 @@ messageRoutes.get('/', async (c) => {
 messageRoutes.post('/:id/acknowledge', async (c) => {
   const db = c.env.DB;
   const messageId = c.req.param('id');
+  const user = c.get('user')!;
 
   if (!db) {
     return errorResponse(c, 'INTERNAL_ERROR', 'اتصال به پایگاه داده در دسترس نیست', undefined, 500);
   }
 
+  // Authorize recipient: verify message exists and caller is authorized to acknowledge
+  const msg = await db
+    .prepare('SELECT id, target_team_id, acknowledged_at FROM tactical_messages WHERE id = ?')
+    .bind(messageId)
+    .first<{ id: string; target_team_id: string | null; acknowledged_at: number | null }>();
+
+  if (!msg) {
+    return errorResponse(c, 'NOT_FOUND', `پیام عملیاتی با شناسه '${messageId}' یافت نشد`, undefined, 404);
+  }
+
+  if (msg.target_team_id && user.role === 'TEAM_LEAD') {
+    const userTeam = await db
+      .prepare('SELECT id FROM teams WHERE lead_user_id = ? AND is_active = 1')
+      .bind(user.id)
+      .first<{ id: string }>();
+
+    if (!userTeam || userTeam.id !== msg.target_team_id) {
+      return errorResponse(c, 'FORBIDDEN', 'شما مجوز تأیید دریافت پیام‌های سایر گروه‌ها را ندارید', undefined, 403);
+    }
+  }
+
   const now = Date.now();
-  const updateResult = await db
+  await db
     .prepare('UPDATE tactical_messages SET acknowledged_at = ? WHERE id = ? AND acknowledged_at IS NULL')
     .bind(now, messageId)
     .run();
 
-  if (updateResult.meta.changes === 0) {
-    // Check if message exists
-    const msg = await db.prepare('SELECT id, acknowledged_at FROM tactical_messages WHERE id = ?').bind(messageId).first();
-    if (!msg) {
-      return errorResponse(c, 'NOT_FOUND', `پیام عملیاتی با شناسه '${messageId}' یافت نشد`, undefined, 404);
-    }
-  }
-
-  return successResponse(c, { acknowledged_at: now });
+  return successResponse(c, { acknowledged_at: msg.acknowledged_at || now });
 });

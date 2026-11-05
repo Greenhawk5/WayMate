@@ -1,7 +1,9 @@
 package ir.alifaniani.waymate.ui.common
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -17,27 +19,27 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 
 /**
- * High-contrast primary action button with a guaranteed 48dp+ touch target
+ * High-contrast primary action button with an accessible 48dp+ touch target
  * and integrated loading indicator.
  */
 @Composable
 fun TacticalPrimaryButton(
     text: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier.fillMaxWidth(),
     enabled: Boolean = true,
     isLoading: Boolean = false
 ) {
     Button(
         onClick = onClick,
         modifier = modifier
-            .fillMaxWidth()
-            .height(50.dp)
+            .heightIn(min = 48.dp)
             .semantics {
                 if (isLoading) contentDescription = "در حال بارگذاری..."
             },
         enabled = enabled && !isLoading,
         shape = RoundedCornerShape(8.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -54,20 +56,21 @@ fun TacticalPrimaryButton(
         } else {
             Text(
                 text = text,
-                style = MaterialTheme.typography.titleMedium
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1
             )
         }
     }
 }
 
 /**
- * Secondary outlined action button for non-primary or destructive actions (e.g. Sign Out).
+ * Secondary outlined action button for secondary or destructive actions (e.g. Sign Out, Dialogs).
  */
 @Composable
 fun TacticalOutlinedButton(
     text: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier.fillMaxWidth(),
     enabled: Boolean = true,
     isDestructive: Boolean = false
 ) {
@@ -80,23 +83,24 @@ fun TacticalOutlinedButton(
     OutlinedButton(
         onClick = onClick,
         modifier = modifier
-            .fillMaxWidth()
-            .height(50.dp),
+            .heightIn(min = 44.dp),
         enabled = enabled,
         shape = RoundedCornerShape(8.dp),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
         colors = ButtonDefaults.outlinedButtonColors(
             contentColor = contentColor
         ),
-        border = androidx.compose.foundation.BorderStroke(
+        border = BorderStroke(
             width = 1.dp,
             color = if (isDestructive) MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
-                    else MaterialTheme.colorScheme.outline
+            else MaterialTheme.colorScheme.outline
         )
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.titleMedium,
-            color = contentColor
+            style = MaterialTheme.typography.labelLarge,
+            color = contentColor,
+            maxLines = 1
         )
     }
 }

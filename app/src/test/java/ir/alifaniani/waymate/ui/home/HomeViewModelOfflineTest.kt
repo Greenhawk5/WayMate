@@ -59,6 +59,8 @@ class HomeViewModelOfflineTest {
             override suspend fun getTeamById(teamId: String): Response<ApiResponseDto<TeamDto>> = throw NotImplementedError()
             override suspend fun createTeam(request: CreateTeamRequestDto): Response<ApiResponseDto<TeamDto>> = throw NotImplementedError()
             override suspend fun updateTeam(teamId: String, request: UpdateTeamRequestDto): Response<ApiResponseDto<TeamDto>> = throw NotImplementedError()
+            override suspend fun addMember(teamId: String, request: ir.alifaniani.waymate.data.dto.CreateMemberDto): Response<ApiResponseDto<ir.alifaniani.waymate.data.dto.TeamMemberDto>> = throw NotImplementedError()
+            override suspend fun removeMember(teamId: String, memberId: String): Response<ApiResponseDto<Map<String, String>>> = throw NotImplementedError()
         }
 
         val offlineMessageApi = object : MessageApiService {
@@ -121,6 +123,8 @@ class HomeViewModelOfflineTest {
             override suspend fun getTeamById(teamId: String): Response<ApiResponseDto<TeamDto>> = throw NotImplementedError()
             override suspend fun createTeam(request: CreateTeamRequestDto): Response<ApiResponseDto<TeamDto>> = throw NotImplementedError()
             override suspend fun updateTeam(teamId: String, request: UpdateTeamRequestDto): Response<ApiResponseDto<TeamDto>> = throw NotImplementedError()
+            override suspend fun addMember(teamId: String, request: ir.alifaniani.waymate.data.dto.CreateMemberDto): Response<ApiResponseDto<ir.alifaniani.waymate.data.dto.TeamMemberDto>> = throw NotImplementedError()
+            override suspend fun removeMember(teamId: String, memberId: String): Response<ApiResponseDto<Map<String, String>>> = throw NotImplementedError()
         }
 
         val dummyStatusApi = object : StatusApiService {

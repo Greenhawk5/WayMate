@@ -377,4 +377,101 @@ class HomeViewModelTest {
         viewModel.dismissManagementFeedback()
         assertNull(viewModel.uiState.value.managementFeedbackMessage)
     }
+
+    @Test
+    fun addTeamMember_success_addsMemberAndUpdatesTeamList() {
+        val team = viewModel.uiState.value.teams.first()
+        val initialMemberCount = team.members.size
+
+        viewModel.addTeamMember(
+            teamId = team.id,
+            fullName = "علی حسنی",
+            callsign = "سهند ۴",
+            roleInTeam = "دیده‌بان"
+        )
+
+        val state = viewModel.uiState.value
+        assertFalse(state.isManagementLoading)
+        assertFalse(state.isManagementFeedbackError)
+        assertNotNull(state.managementFeedbackMessage)
+        assertTrue(state.managementFeedbackMessage!!.contains("سهند ۴"))
+
+        val updatedTeam = state.teams.first { it.id == team.id }
+        assertEquals(initialMemberCount + 1, updatedTeam.members.size)
+        assertTrue(updatedTeam.members.any { it.callsign == "سهند ۴" })
+    }
+
+    @Test
+    fun removeTeamMember_success_removesMemberAndUpdatesTeamList() {
+        val team = viewModel.uiState.value.teams.first()
+        val memberToRemove = team.members.first()
+        val initialMemberCount = team.members.size
+
+        viewModel.removeTeamMember(
+            teamId = team.id,
+            memberId = memberToRemove.id
+        )
+
+        val state = viewModel.uiState.value
+        assertFalse(state.isManagementLoading)
+        assertFalse(state.isManagementFeedbackError)
+        assertNotNull(state.managementFeedbackMessage)
+
+        val updatedTeam = state.teams.first { it.id == team.id }
+        assertEquals(initialMemberCount - 1, updatedTeam.members.size)
+        assertFalse(updatedTeam.members.any { it.id == memberToRemove.id })
+    }
+
+    @Test
+    fun locationRationale_showAndDismiss_updatesUiState() {
+        assertFalse(viewModel.uiState.value.isLocationPermissionRationaleVisible)
+
+        viewModel.showLocationRationale()
+        assertTrue(viewModel.uiState.value.isLocationPermissionRationaleVisible)
+
+        viewModel.dismissLocationRationale()
+        assertFalse(viewModel.uiState.value.isLocationPermissionRationaleVisible)
+    }
+
+    @Test
+    fun onLocationPermissionDenied_regularAndPermanent_updatesUiStateCorrectly() {
+        // Regular denial
+        viewModel.onLocationPermissionDenied(isPermanentlyDenied = false)
+        assertTrue(viewModel.uiState.value.isLocationPermissionDenied)
+        assertFalse(viewModel.uiState.value.isLocationPermissionPermanentlyDenied)
+
+        viewModel.dismissLocationPermissionDenied()
+        assertFalse(viewModel.uiState.value.isLocationPermissionDenied)
+        assertFalse(viewModel.uiState.value.isLocationPermissionPermanentlyDenied)
+
+        // Permanent denial
+        viewModel.onLocationPermissionDenied(isPermanentlyDenied = true)
+        assertTrue(viewModel.uiState.value.isLocationPermissionDenied)
+        assertTrue(viewModel.uiState.value.isLocationPermissionPermanentlyDenied)
+
+        viewModel.dismissLocationPermissionDenied()
+        assertFalse(viewModel.uiState.value.isLocationPermissionDenied)
+        assertFalse(viewModel.uiState.value.isLocationPermissionPermanentlyDenied)
+    }
+
+    @Test
+    fun selectGroupMember_updatesSelectedMemberInUiState() {
+        assertNull(viewModel.uiState.value.selectedGroupMember)
+
+        val member = ir.alifaniani.waymate.domain.model.GroupMemberLocation(
+            userId = "usr_007",
+            callsign = "عقاب ۲",
+            teamId = "team_alpha",
+            latitude = 28.53,
+            longitude = 53.60,
+            accuracyMeters = 5f,
+            timestamp = 1700000000000L
+        )
+
+        viewModel.selectGroupMember(member)
+        assertEquals(member, viewModel.uiState.value.selectedGroupMember)
+
+        viewModel.selectGroupMember(null)
+        assertNull(viewModel.uiState.value.selectedGroupMember)
+    }
 }

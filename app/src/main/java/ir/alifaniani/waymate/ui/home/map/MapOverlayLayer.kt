@@ -73,6 +73,33 @@ val defaultMapLayers: List<MapOverlayLayer> = listOf(
         attribution = "داده‌های ساختگی صرفاً جهت توسعه و آموزش"
     ),
     MapOverlayLayer(
+        id = "shared_points_of_interest",
+        titlePersian = "نقاط مشترک گروه / مسیر (POI)",
+        descriptionPersian = "نقاط کلیدی شامل مبدأ، مقصد، کمپ، چشمه‌های آب و استراحتگاه‌های ثبت‌شده گروه",
+        category = LayerCategory.OPERATIONAL,
+        isEnabled = true,
+        isAvailable = true,
+        attribution = "همگام‌سازی ابری و پایگاه داده محلی WayMate"
+    ),
+    MapOverlayLayer(
+        id = "live_group_locations",
+        titlePersian = "موقعیت زنده اعضای گروه",
+        descriptionPersian = "نمایش مکان لحظه‌ای همنوردانی که اشتراک‌گذاری موقعیت را فعال کرده‌اند",
+        category = LayerCategory.OPERATIONAL,
+        isEnabled = true,
+        isAvailable = true,
+        attribution = "ارتباط آنی WebSocket و رضایت صریح کاربر"
+    ),
+    MapOverlayLayer(
+        id = "hiking_routes",
+        titlePersian = "مسیرهای کوهپیمایی و پاکوب‌ها",
+        descriptionPersian = "مسیرهای استاندارد صعود، پاکوب‌های طبیعت‌گردی و ایستگاه‌های بین‌راهی جهرم",
+        category = LayerCategory.OPERATIONAL,
+        isEnabled = true,
+        isAvailable = true,
+        attribution = "مسیرهای کوهنوردی آموزشی و شبیه‌سازی حرکت"
+    ),
+    MapOverlayLayer(
         id = "patrol_routes",
         titlePersian = "مسیرهای گشتی مصوب",
         descriptionPersian = "طرح‌ریزی مسیرهای ایست‌وبازرسی و گشت‌زنی عملیاتی (در دست توسعه)",

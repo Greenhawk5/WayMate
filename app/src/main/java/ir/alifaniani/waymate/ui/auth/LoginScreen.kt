@@ -71,6 +71,30 @@ fun LoginScreen(
             type = BannerType.INFO
         )
 
+        Spacer(modifier = Modifier.height(10.dp))
+
+        androidx.compose.foundation.layout.Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
+        ) {
+            ir.alifaniani.waymate.ui.common.TacticalOutlinedButton(
+                text = "ورود آزمایشی فرمانده",
+                onClick = {
+                    onUsernameChanged("commander_demo")
+                    onPasswordChanged("demo123")
+                },
+                modifier = Modifier.weight(1f)
+            )
+            ir.alifaniani.waymate.ui.common.TacticalOutlinedButton(
+                text = "ورود آزمایشی سرتیم",
+                onClick = {
+                    onUsernameChanged("patrol_lead_demo")
+                    onPasswordChanged("demo123")
+                },
+                modifier = Modifier.weight(1f)
+            )
+        }
+
         Spacer(modifier = Modifier.height(20.dp))
 
         // Username Field

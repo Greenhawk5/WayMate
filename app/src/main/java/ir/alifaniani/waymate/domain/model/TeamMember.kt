@@ -1,11 +1,15 @@
 package ir.alifaniani.waymate.domain.model
 
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
 /**
  * Individual member assigned to an operational patrol team.
  */
+@Serializable
 data class TeamMember(
-    val id: String,
-    val fullName: String,
-    val callsign: String,
-    val roleInTeam: String
+    @SerialName("id") val id: String = "",
+    @SerialName("full_name") val fullName: String = "",
+    @SerialName("callsign") val callsign: String = "",
+    @SerialName("role_in_team") val roleInTeam: String = ""
 )

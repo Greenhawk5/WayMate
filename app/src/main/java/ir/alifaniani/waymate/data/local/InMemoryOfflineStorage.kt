@@ -2,6 +2,7 @@ package ir.alifaniani.waymate.data.local
 
 import ir.alifaniani.waymate.data.local.model.QueueStatus
 import ir.alifaniani.waymate.data.local.model.QueuedAction
+import ir.alifaniani.waymate.domain.model.PointOfInterest
 import ir.alifaniani.waymate.domain.model.TacticalMessage
 import ir.alifaniani.waymate.domain.model.Team
 import ir.alifaniani.waymate.domain.model.TeamLiveStatus
@@ -18,10 +19,13 @@ class InMemoryOfflineStorage : OfflineStorage {
     private val teams = mutableListOf<Team>()
     private val messages = mutableListOf<TacticalMessage>()
     private val statuses = mutableListOf<TeamLiveStatus>()
+    private val points = mutableListOf<PointOfInterest>()
 
     private var teamsLastSynced: Long = 0L
     private var messagesLastSynced: Long = 0L
     private var statusesLastSynced: Long = 0L
+    private var pointsLastSynced: Long = 0L
+
 
     override suspend fun enqueueAction(action: QueuedAction): Unit = mutex.withLock {
         val existingIndex = queue.indexOfFirst { it.id == action.id }
@@ -132,6 +136,55 @@ class InMemoryOfflineStorage : OfflineStorage {
         statusesLastSynced
     }
 
+    // ==========================================
+    // Cached Points of Interest (Phase 11)
+    // ==========================================
+
+    override suspend fun savePoints(points: List<PointOfInterest>): Unit = mutex.withLock {
+        val pending = this.points.filter { it.isPendingSync }
+        this.points.clear()
+        this.points.addAll(pending)
+        for (pt in points) {
+            val idx = this.points.indexOfFirst { it.id == pt.id }
+            if (idx >= 0) {
+                this.points[idx] = pt
+            } else {
+                this.points.add(pt)
+            }
+        }
+        this.pointsLastSynced = System.currentTimeMillis()
+    }
+
+    override suspend fun getCachedPoints(teamId: String?): List<PointOfInterest> = mutex.withLock {
+        points.filter { !it.isDeleted && (teamId == null || it.teamId == teamId) }
+            .sortedByDescending { it.updatedAt }
+            .toList()
+    }
+
+    override suspend fun getCachedPointById(id: String): PointOfInterest? = mutex.withLock {
+        points.find { it.id == id && !it.isDeleted }
+    }
+
+    override suspend fun saveLocalPoint(point: PointOfInterest): Unit = mutex.withLock {
+        val idx = points.indexOfFirst { it.id == point.id }
+        if (idx >= 0) {
+            points[idx] = point.copy(isPendingSync = true)
+        } else {
+            points.add(0, point.copy(isPendingSync = true))
+        }
+    }
+
+    override suspend fun markPointDeletedLocally(id: String): Unit = mutex.withLock {
+        val idx = points.indexOfFirst { it.id == id }
+        if (idx >= 0) {
+            points[idx] = points[idx].copy(isDeleted = true, isPendingSync = true)
+        }
+    }
+
+    override suspend fun getPointsLastSynced(): Long = mutex.withLock {
+        pointsLastSynced
+    }
+
     override suspend fun purgeExpiredData(maxAgeMs: Long): Unit = mutex.withLock {
         val threshold = System.currentTimeMillis() - maxAgeMs
         messages.removeAll { it.createdAt < threshold && !it.isPendingSync }
@@ -141,9 +194,21 @@ class InMemoryOfflineStorage : OfflineStorage {
         teams.clear()
         messages.clear()
         statuses.clear()
+        points.clear()
         teamsLastSynced = 0L
         messagesLastSynced = 0L
         statusesLastSynced = 0L
+        pointsLastSynced = 0L
+    }
+
+    private var userOperationalStatus: ir.alifaniani.waymate.domain.model.OperationalStatus? = null
+
+    override suspend fun saveMyOperationalStatus(status: ir.alifaniani.waymate.domain.model.OperationalStatus): Unit = mutex.withLock {
+        userOperationalStatus = status
+    }
+
+    override suspend fun getMyOperationalStatus(): ir.alifaniani.waymate.domain.model.OperationalStatus? = mutex.withLock {
+        userOperationalStatus
     }
 
     override suspend fun clearQueue(): Unit = mutex.withLock {
@@ -154,9 +219,11 @@ class InMemoryOfflineStorage : OfflineStorage {
         teams.clear()
         messages.clear()
         statuses.clear()
+        points.clear()
         teamsLastSynced = 0L
         messagesLastSynced = 0L
         statusesLastSynced = 0L
+        pointsLastSynced = 0L
         queue.clear()
     }
 }

@@ -30,6 +30,8 @@ class FakeStatusRepository(
         return Result.Success(status)
     }
 
+    override suspend fun getMyOperationalStatus(): OperationalStatus? = currentOperationalStatus
+
     fun setLiveStatuses(newStatuses: List<TeamLiveStatus>) {
         liveStatuses.clear()
         liveStatuses.addAll(newStatuses)

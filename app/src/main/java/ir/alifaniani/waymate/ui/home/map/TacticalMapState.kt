@@ -1,5 +1,9 @@
 package ir.alifaniani.waymate.ui.home.map
 
+import ir.alifaniani.waymate.domain.model.GroupMemberLocation
+import ir.alifaniani.waymate.domain.model.HikingRoute
+import ir.alifaniani.waymate.domain.model.PointOfInterest
+import ir.alifaniani.waymate.domain.model.defaultJahromHikingRoutes
 import ir.alifaniani.waymate.ui.common.BadgeTone
 
 /**
@@ -37,6 +41,14 @@ data class TacticalMapUiState(
     val vectorSegments: List<GisLineSegment> = emptyList(),
     val markers: List<SyntheticMarker> = defaultJahromSyntheticMarkers,
     val selectedMarker: SyntheticMarker? = null,
+    val pointsOfInterest: List<PointOfInterest> = emptyList(),
+    val selectedPointOfInterest: PointOfInterest? = null,
+    val hikingRoutes: List<HikingRoute> = defaultJahromHikingRoutes,
+    val selectedRoute: HikingRoute? = null,
+    val simulatedHikerPosition: GeoPoint? = null,
+    val simulatedHikerBearing: Float = 0f,
+    val groupMemberLocations: List<GroupMemberLocation> = emptyList(),
+    val selectedGroupMember: GroupMemberLocation? = null,
     val isLayerSheetVisible: Boolean = false,
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
@@ -72,6 +84,15 @@ data class TacticalMapUiState(
 
     val isSyntheticUnitsEnabled: Boolean
         get() = layers.find { it.id == "synthetic_units" }?.isEnabled == true
+
+    val isPointsOfInterestEnabled: Boolean
+        get() = layers.find { it.id == "shared_points_of_interest" }?.isEnabled == true
+
+    val isGroupLocationsEnabled: Boolean
+        get() = layers.find { it.id == "live_group_locations" }?.isEnabled != false
+
+    val isHikingRoutesEnabled: Boolean
+        get() = layers.find { it.id == "hiking_routes" }?.isEnabled == true
 
     val activeLayerCount: Int
         get() = layers.count { it.isEnabled }

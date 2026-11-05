@@ -160,6 +160,11 @@ export async function verifyJwt(token: string, secret: string): Promise<AuthUser
   const dataToSign = `${headerPart}.${payloadPart}`;
 
   try {
+    const header = JSON.parse(base64UrlDecode(headerPart));
+    if (!header || header.alg !== 'HS256' || (header.typ && header.typ.toUpperCase() !== 'JWT')) {
+      return null;
+    }
+
     const enc = new TextEncoder();
     const key = await crypto.subtle.importKey(
       'raw',

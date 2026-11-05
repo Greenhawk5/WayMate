@@ -10,6 +10,8 @@ import ir.alifaniani.waymate.data.local.model.QueueStatus
 import ir.alifaniani.waymate.data.local.model.QueuedAction
 import ir.alifaniani.waymate.domain.model.ConnectionStatus
 import ir.alifaniani.waymate.domain.model.OperationalStatus
+import ir.alifaniani.waymate.domain.model.PointCategory
+import ir.alifaniani.waymate.domain.model.PointOfInterest
 import ir.alifaniani.waymate.domain.model.TacticalMessage
 import ir.alifaniani.waymate.domain.model.Team
 import ir.alifaniani.waymate.domain.model.TeamLiveStatus
@@ -17,6 +19,7 @@ import ir.alifaniani.waymate.domain.model.TeamMember
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+
 
 /**
  * Production [OfflineStorage] implementation backed by Android SQLite.
@@ -414,6 +417,144 @@ class SqliteOfflineStorage(
         }
 
     // ==========================================
+    // Cached Points of Interest (Phase 11)
+    // ==========================================
+
+    override suspend fun savePoints(points: List<PointOfInterest>): Unit =
+        withContext(dispatcherProvider.io) {
+            val db = dbHelper.writableDatabase
+            db.beginTransaction()
+            try {
+                for (point in points) {
+                    val values = ContentValues().apply {
+                        put(WayMateDatabaseHelper.COL_POINT_ID, point.id)
+                        put(WayMateDatabaseHelper.COL_POINT_TEAM_ID, point.teamId)
+                        put(WayMateDatabaseHelper.COL_POINT_TITLE, point.title)
+                        put(WayMateDatabaseHelper.COL_POINT_DESCRIPTION, point.description)
+                        put(WayMateDatabaseHelper.COL_POINT_CATEGORY, point.category.name)
+                        put(WayMateDatabaseHelper.COL_POINT_LATITUDE, point.latitude)
+                        put(WayMateDatabaseHelper.COL_POINT_LONGITUDE, point.longitude)
+                        put(WayMateDatabaseHelper.COL_POINT_CREATED_BY_ID, point.createdByUserId)
+                        put(WayMateDatabaseHelper.COL_POINT_CREATED_BY_CALLSIGN, point.createdByCallsign)
+                        put(WayMateDatabaseHelper.COL_POINT_UPDATED_BY_ID, point.updatedByUserId)
+                        put(WayMateDatabaseHelper.COL_POINT_UPDATED_BY_CALLSIGN, point.updatedByCallsign)
+                        put(WayMateDatabaseHelper.COL_POINT_IS_DELETED, if (point.isDeleted) 1 else 0)
+                        put(WayMateDatabaseHelper.COL_POINT_VERSION, point.version)
+                        put(WayMateDatabaseHelper.COL_POINT_CREATED_AT, point.createdAt)
+                        put(WayMateDatabaseHelper.COL_POINT_UPDATED_AT, point.updatedAt)
+                        put(WayMateDatabaseHelper.COL_POINT_IS_PENDING_SYNC, if (point.isPendingSync) 1 else 0)
+                        put(WayMateDatabaseHelper.COL_POINT_SYNCED_AT, System.currentTimeMillis())
+                    }
+                    db.insertWithOnConflict(
+                        WayMateDatabaseHelper.TABLE_CACHED_POINTS,
+                        null,
+                        values,
+                        android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE
+                    )
+                }
+                setMetadata(db, WayMateDatabaseHelper.META_KEY_POINTS_SYNCED, System.currentTimeMillis())
+                db.setTransactionSuccessful()
+            } finally {
+                db.endTransaction()
+            }
+        }
+
+    override suspend fun getCachedPoints(teamId: String?): List<PointOfInterest> =
+        withContext(dispatcherProvider.io) {
+            val db = dbHelper.readableDatabase
+            val points = mutableListOf<PointOfInterest>()
+            val selection = if (teamId != null) {
+                "${WayMateDatabaseHelper.COL_POINT_TEAM_ID} = ? AND ${WayMateDatabaseHelper.COL_POINT_IS_DELETED} = 0"
+            } else {
+                "${WayMateDatabaseHelper.COL_POINT_IS_DELETED} = 0"
+            }
+            val selectionArgs = if (teamId != null) arrayOf(teamId) else null
+
+            val cursor = db.query(
+                WayMateDatabaseHelper.TABLE_CACHED_POINTS,
+                null,
+                selection,
+                selectionArgs,
+                null,
+                null,
+                "${WayMateDatabaseHelper.COL_POINT_UPDATED_AT} DESC"
+            )
+            cursor.use { c ->
+                while (c.moveToNext()) {
+                    points.add(cursorToPoint(c))
+                }
+            }
+            points
+        }
+
+    override suspend fun getCachedPointById(id: String): PointOfInterest? =
+        withContext(dispatcherProvider.io) {
+            val db = dbHelper.readableDatabase
+            val cursor = db.query(
+                WayMateDatabaseHelper.TABLE_CACHED_POINTS,
+                null,
+                "${WayMateDatabaseHelper.COL_POINT_ID} = ?",
+                arrayOf(id),
+                null,
+                null,
+                null
+            )
+            cursor.use { c ->
+                if (c.moveToFirst()) cursorToPoint(c) else null
+            }
+        }
+
+    override suspend fun saveLocalPoint(point: PointOfInterest): Unit =
+        withContext(dispatcherProvider.io) {
+            val db = dbHelper.writableDatabase
+            val values = ContentValues().apply {
+                put(WayMateDatabaseHelper.COL_POINT_ID, point.id)
+                put(WayMateDatabaseHelper.COL_POINT_TEAM_ID, point.teamId)
+                put(WayMateDatabaseHelper.COL_POINT_TITLE, point.title)
+                put(WayMateDatabaseHelper.COL_POINT_DESCRIPTION, point.description)
+                put(WayMateDatabaseHelper.COL_POINT_CATEGORY, point.category.name)
+                put(WayMateDatabaseHelper.COL_POINT_LATITUDE, point.latitude)
+                put(WayMateDatabaseHelper.COL_POINT_LONGITUDE, point.longitude)
+                put(WayMateDatabaseHelper.COL_POINT_CREATED_BY_ID, point.createdByUserId)
+                put(WayMateDatabaseHelper.COL_POINT_CREATED_BY_CALLSIGN, point.createdByCallsign)
+                put(WayMateDatabaseHelper.COL_POINT_UPDATED_BY_ID, point.updatedByUserId)
+                put(WayMateDatabaseHelper.COL_POINT_UPDATED_BY_CALLSIGN, point.updatedByCallsign)
+                put(WayMateDatabaseHelper.COL_POINT_IS_DELETED, if (point.isDeleted) 1 else 0)
+                put(WayMateDatabaseHelper.COL_POINT_VERSION, point.version)
+                put(WayMateDatabaseHelper.COL_POINT_CREATED_AT, point.createdAt)
+                put(WayMateDatabaseHelper.COL_POINT_UPDATED_AT, point.updatedAt)
+                put(WayMateDatabaseHelper.COL_POINT_IS_PENDING_SYNC, if (point.isPendingSync) 1 else 0)
+                put(WayMateDatabaseHelper.COL_POINT_SYNCED_AT, System.currentTimeMillis())
+            }
+            db.insertWithOnConflict(
+                WayMateDatabaseHelper.TABLE_CACHED_POINTS,
+                null,
+                values,
+                android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE
+            )
+        }
+
+    override suspend fun markPointDeletedLocally(id: String): Unit =
+        withContext(dispatcherProvider.io) {
+            val db = dbHelper.writableDatabase
+            val values = ContentValues().apply {
+                put(WayMateDatabaseHelper.COL_POINT_IS_DELETED, 1)
+                put(WayMateDatabaseHelper.COL_POINT_UPDATED_AT, System.currentTimeMillis())
+            }
+            db.update(
+                WayMateDatabaseHelper.TABLE_CACHED_POINTS,
+                values,
+                "${WayMateDatabaseHelper.COL_POINT_ID} = ?",
+                arrayOf(id)
+            )
+        }
+
+    override suspend fun getPointsLastSynced(): Long =
+        withContext(dispatcherProvider.io) {
+            getMetadata(WayMateDatabaseHelper.META_KEY_POINTS_SYNCED)
+        }
+
+    // ==========================================
     // Retention, Pruning & Session Cleanup
     // ==========================================
 
@@ -437,12 +578,14 @@ class SqliteOfflineStorage(
                 db.delete(WayMateDatabaseHelper.TABLE_CACHED_TEAMS, null, null)
                 db.delete(WayMateDatabaseHelper.TABLE_CACHED_MESSAGES, null, null)
                 db.delete(WayMateDatabaseHelper.TABLE_CACHED_STATUSES, null, null)
+                db.delete(WayMateDatabaseHelper.TABLE_CACHED_POINTS, null, null)
                 db.delete(WayMateDatabaseHelper.TABLE_METADATA, null, null)
                 db.setTransactionSuccessful()
             } finally {
                 db.endTransaction()
             }
         }
+
 
     override suspend fun clearQueue(): Unit =
         withContext(dispatcherProvider.io) {
@@ -496,6 +639,32 @@ class SqliteOfflineStorage(
         )
     }
 
+    override suspend fun saveMyOperationalStatus(status: OperationalStatus): Unit =
+        withContext(dispatcherProvider.io) {
+            val db = dbHelper.writableDatabase
+            setMetadata(db, "user_operational_status", status.ordinal.toLong())
+        }
+
+    override suspend fun getMyOperationalStatus(): OperationalStatus? =
+        withContext(dispatcherProvider.io) {
+            val db = dbHelper.readableDatabase
+            val cursor = db.query(
+                WayMateDatabaseHelper.TABLE_METADATA,
+                arrayOf(WayMateDatabaseHelper.COL_META_VALUE),
+                "${WayMateDatabaseHelper.COL_META_KEY} = ?",
+                arrayOf("user_operational_status"),
+                null,
+                null,
+                null
+            )
+            cursor.use { c ->
+                if (c.moveToFirst()) {
+                    val ordinal = c.getInt(0)
+                    OperationalStatus.entries.getOrNull(ordinal)
+                } else null
+            }
+        }
+
     private fun setMetadata(db: android.database.sqlite.SQLiteDatabase, key: String, value: Long) {
         val values = ContentValues().apply {
             put(WayMateDatabaseHelper.COL_META_KEY, key)
@@ -523,5 +692,49 @@ class SqliteOfflineStorage(
         return cursor.use { c ->
             if (c.moveToFirst()) c.getLong(0) else 0L
         }
+    }
+
+    private fun cursorToPoint(c: Cursor): PointOfInterest {
+        val id = c.getString(c.getColumnIndexOrThrow(WayMateDatabaseHelper.COL_POINT_ID))
+        val teamId = c.getString(c.getColumnIndexOrThrow(WayMateDatabaseHelper.COL_POINT_TEAM_ID))
+        val title = c.getString(c.getColumnIndexOrThrow(WayMateDatabaseHelper.COL_POINT_TITLE))
+        val description = c.getString(c.getColumnIndexOrThrow(WayMateDatabaseHelper.COL_POINT_DESCRIPTION))
+        val categoryStr = c.getString(c.getColumnIndexOrThrow(WayMateDatabaseHelper.COL_POINT_CATEGORY))
+        val lat = c.getDouble(c.getColumnIndexOrThrow(WayMateDatabaseHelper.COL_POINT_LATITUDE))
+        val lon = c.getDouble(c.getColumnIndexOrThrow(WayMateDatabaseHelper.COL_POINT_LONGITUDE))
+        val createdById = c.getString(c.getColumnIndexOrThrow(WayMateDatabaseHelper.COL_POINT_CREATED_BY_ID))
+        val createdByCallsign = c.getString(c.getColumnIndexOrThrow(WayMateDatabaseHelper.COL_POINT_CREATED_BY_CALLSIGN))
+        val updatedById = c.getString(c.getColumnIndexOrThrow(WayMateDatabaseHelper.COL_POINT_UPDATED_BY_ID))
+        val updatedByCallsign = c.getString(c.getColumnIndexOrThrow(WayMateDatabaseHelper.COL_POINT_UPDATED_BY_CALLSIGN))
+        val isDeleted = c.getInt(c.getColumnIndexOrThrow(WayMateDatabaseHelper.COL_POINT_IS_DELETED)) == 1
+        val version = c.getInt(c.getColumnIndexOrThrow(WayMateDatabaseHelper.COL_POINT_VERSION))
+        val createdAt = c.getLong(c.getColumnIndexOrThrow(WayMateDatabaseHelper.COL_POINT_CREATED_AT))
+        val updatedAt = c.getLong(c.getColumnIndexOrThrow(WayMateDatabaseHelper.COL_POINT_UPDATED_AT))
+        val isPendingSync = c.getInt(c.getColumnIndexOrThrow(WayMateDatabaseHelper.COL_POINT_IS_PENDING_SYNC)) == 1
+
+        val category = try {
+            PointCategory.valueOf(categoryStr)
+        } catch (_: Exception) {
+            PointCategory.GENERAL
+        }
+
+        return PointOfInterest(
+            id = id,
+            teamId = teamId,
+            title = title,
+            description = description,
+            category = category,
+            latitude = lat,
+            longitude = lon,
+            createdByUserId = createdById,
+            createdByCallsign = createdByCallsign,
+            updatedByUserId = updatedById,
+            updatedByCallsign = updatedByCallsign,
+            isDeleted = isDeleted,
+            version = version,
+            createdAt = createdAt,
+            updatedAt = updatedAt,
+            isPendingSync = isPendingSync
+        )
     }
 }

@@ -232,4 +232,76 @@ class RealTeamRepository(
             Result.Error(ApiException.NetworkUnavailable(errorMessage), errorMessage)
         }
     }
+
+    override suspend fun addMember(
+        teamId: String,
+        fullName: String,
+        callsign: String,
+        roleInTeam: String
+    ): Result<TeamMember> = withContext(dispatcherProvider.io) {
+        try {
+            val request = CreateMemberDto(
+                fullName = fullName,
+                callsign = callsign,
+                roleInTeam = roleInTeam
+            )
+            val response = teamApiService.addMember(teamId, request)
+            if (response.isSuccessful) {
+                val body = response.body()
+                if (body != null && body.success && body.data != null) {
+                    val newMember = body.data.toDomain()
+                    offlineStorage?.let { storage ->
+                        val cachedTeams = storage.getCachedTeams().toMutableList()
+                        val idx = cachedTeams.indexOfFirst { it.id == teamId }
+                        if (idx != -1) {
+                            val t = cachedTeams[idx]
+                            val updatedMembers = t.members + newMember
+                            cachedTeams[idx] = t.copy(members = updatedMembers, memberCount = updatedMembers.size)
+                            storage.saveTeams(cachedTeams)
+                        }
+                    }
+                    Result.Success(newMember)
+                } else {
+                    val errorMsg = body?.error?.message ?: "خطا در افزودن عضو به گروه عملیاتی"
+                    Result.Error(ApiException.ServerError(response.code(), errorMsg), errorMsg)
+                }
+            } else {
+                val apiError = NetworkErrorMapper.parseApiError(response.errorBody())
+                val errorMessage = NetworkErrorMapper.mapHttpError(response.code(), apiError)
+                Result.Error(Exception(errorMessage), errorMessage)
+            }
+        } catch (e: Exception) {
+            val errorMessage = NetworkErrorMapper.mapThrowable(e)
+            Result.Error(ApiException.NetworkUnavailable(errorMessage), errorMessage)
+        }
+    }
+
+    override suspend fun removeMember(
+        teamId: String,
+        memberId: String
+    ): Result<Unit> = withContext(dispatcherProvider.io) {
+        try {
+            val response = teamApiService.removeMember(teamId, memberId)
+            if (response.isSuccessful) {
+                offlineStorage?.let { storage ->
+                    val cachedTeams = storage.getCachedTeams().toMutableList()
+                    val idx = cachedTeams.indexOfFirst { it.id == teamId }
+                    if (idx != -1) {
+                        val t = cachedTeams[idx]
+                        val updatedMembers = t.members.filterNot { it.id == memberId }
+                        cachedTeams[idx] = t.copy(members = updatedMembers, memberCount = updatedMembers.size)
+                        storage.saveTeams(cachedTeams)
+                    }
+                }
+                Result.Success(Unit)
+            } else {
+                val apiError = NetworkErrorMapper.parseApiError(response.errorBody())
+                val errorMessage = NetworkErrorMapper.mapHttpError(response.code(), apiError)
+                Result.Error(Exception(errorMessage), errorMessage)
+            }
+        } catch (e: Exception) {
+            val errorMessage = NetworkErrorMapper.mapThrowable(e)
+            Result.Error(ApiException.NetworkUnavailable(errorMessage), errorMessage)
+        }
+    }
 }

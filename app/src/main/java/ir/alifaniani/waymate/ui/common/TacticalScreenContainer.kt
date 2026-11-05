@@ -38,7 +38,7 @@ fun TacticalScreenContainer(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .imePadding(),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.TopCenter
     ) {
         Column(
             modifier = Modifier

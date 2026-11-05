@@ -3,10 +3,10 @@
 ## 1. Document Status and Context
 
 ### 1.1 Status
-- **Current Phase**: Phase 2A (Android Architecture Design).
-- **Status**: **PROPOSAL** — Pending project owner review and sign-off.
+- **Current Milestone**: Pre-Commit Checkpoint (Phases 0–14 + Phase 7.2 Complete).
+- **Status**: **STABILIZED & VERIFIED**
 - **Scope**: Defines the structural layers, package organization, data flow, navigation flow, networking boundaries, and testing strategy for the WayMate Android application (`ir.alifaniani.waymate`).
-- **Primacy**: This document expands upon the baseline principles in [AGENTS.md](file:///E:/2.Things/Android-Projects/WayMate/AGENTS.md) and requirements in [docs/requirements.md](file:///E:/2.Things/Android-Projects/WayMate/docs/requirements.md). Unapproved technical selections remain explicitly marked as **PROPOSED**.
+- **Primacy**: This document reflects the verified implementation as guided by [AGENTS.md](file:///E:/2.Things/Android-Projects/WayMate/AGENTS.md), [docs/requirements.md](file:///E:/2.Things/Android-Projects/WayMate/docs/requirements.md), and [docs/phase-7.2-operational-geolocation.md](file:///E:/2.Things/Android-Projects/WayMate/docs/phase-7.2-operational-geolocation.md).
 
 ---
 
@@ -395,17 +395,22 @@ In accordance with *AGENTS.md* security rules:
 
 ---
 
-## 10. Discrepancies and Open Decisions Requiring Approval
+## 10. Resolved Architectural Decisions
 
-1. **Map Rendering SDK**:
-   - Proposed: **MapLibre Android SDK** (detailed in `AD-001`).
-   - Status: Awaiting project owner decision.
+The architectural selections originally evaluated in Phase 2A have been resolved and implemented as follows:
+
+1. **Map Rendering Engine**:
+   - **Implemented:** Custom **Jetpack Compose Canvas 2D Engine** (`TacticalMapCanvas`).
+   - **Rationale:** Avoids heavyweight closed/native map SDK dependencies; enables lightweight offline rendering of Jahrom vector thoroughfares, waterways, hiking simulation, and live comrade marker HUDs.
 2. **Real-Time Transport**:
-   - Proposed: **5-Second REST Polling** (detailed in `AD-002`).
-   - Status: Awaiting project owner decision.
+   - **Implemented:** **WebSocket over Cloudflare Durable Objects** (`LocationSessionDO`).
+   - **Rationale:** Minimizes latency for live location streaming; utilizes in-memory edge fan-out without database write overhead; authenticated via `Authorization: Bearer <token>` handshake header.
 3. **Dependency Injection**:
-   - Proposed: **Manual `AppContainer` Injection** (detailed in `AD-008`).
-   - Status: Awaiting project owner decision.
+   - **Implemented:** **Manual `AppContainer` Injection**.
+   - **Rationale:** Clear compile-time dependency wiring without code generation overhead (Dagger/Hilt) or reflection, well-suited for a clean educational architecture.
 4. **Networking Engine**:
-   - Proposed: **Retrofit + OkHttp + kotlinx.serialization** (detailed in `AD-009`).
-   - Status: Awaiting project owner decision.
+   - **Implemented:** **OkHttp + Kotlinx Serialization**.
+   - **Rationale:** Lightweight, type-safe JSON serialization and bidirectional WebSocket support.
+5. **Local Storage**:
+   - **Implemented:** **Native Android SQLite** (`WayMateDatabaseHelper`, `SqliteOfflineStorage`).
+   - **Rationale:** Reliable, zero-dependency offline persistence with transactional store-and-forward queue (`offline_queue`).

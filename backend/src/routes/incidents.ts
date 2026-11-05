@@ -175,6 +175,8 @@ incidentRoutes.post('/', async (c) => {
  */
 incidentRoutes.get('/', async (c) => {
   const db = c.env.DB;
+  const user = c.get('user')!;
+
   if (!db) {
     return errorResponse(c, 'INTERNAL_ERROR', 'اتصال به پایگاه داده در دسترس نیست', undefined, 500);
   }
@@ -182,18 +184,46 @@ incidentRoutes.get('/', async (c) => {
   const offset = parseInt(c.req.query('offset') || '0', 10);
   const limit = Math.min(parseInt(c.req.query('limit') || '50', 10), 100);
 
-  const countRow = await db.prepare('SELECT COUNT(*) as total FROM incidents').first<{ total: number }>();
+  let teamFilter: string | null = null;
+  if (user.role === 'TEAM_LEAD') {
+    const userTeam = await db
+      .prepare('SELECT id FROM teams WHERE lead_user_id = ? AND is_active = 1')
+      .bind(user.id)
+      .first<{ id: string }>();
+
+    if (!userTeam) {
+      return paginatedResponse(c, [], { offset, limit, total: 0, has_more: false });
+    }
+    teamFilter = userTeam.id;
+  } else {
+    const queryTeamId = c.req.query('team_id');
+    if (queryTeamId) {
+      teamFilter = queryTeamId.trim();
+    }
+  }
+
+  let countQuery = 'SELECT COUNT(*) as total FROM incidents';
+  let listQuery = `SELECT id, team_id, reporter_user_id, title, description, incident_type, severity, latitude, longitude, status, created_at, resolved_at
+     FROM incidents`;
+  const countParams: (string | number)[] = [];
+  const listParams: (string | number)[] = [];
+
+  if (teamFilter) {
+    countQuery += ' WHERE team_id = ?';
+    listQuery += ' WHERE team_id = ?';
+    countParams.push(teamFilter);
+    listParams.push(teamFilter);
+  }
+
+  listQuery += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+  listParams.push(limit, offset);
+
+  const countRow = countParams.length > 0
+    ? await db.prepare(countQuery).bind(...countParams).first<{ total: number }>()
+    : await db.prepare(countQuery).first<{ total: number }>();
   const total = countRow ? countRow.total : 0;
 
-  const { results } = await db
-    .prepare(
-      `SELECT id, team_id, reporter_user_id, title, description, incident_type, severity, latitude, longitude, status, created_at, resolved_at
-       FROM incidents
-       ORDER BY created_at DESC
-       LIMIT ? OFFSET ?`
-    )
-    .bind(limit, offset)
-    .all<DbIncident>();
+  const { results } = await db.prepare(listQuery).bind(...listParams).all<DbIncident>();
 
   return paginatedResponse(
     c,

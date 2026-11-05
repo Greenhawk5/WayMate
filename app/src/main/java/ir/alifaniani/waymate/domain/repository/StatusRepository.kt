@@ -18,4 +18,9 @@ interface StatusRepository {
      * Updates the operational status of the authenticated team lead's unit.
      */
     suspend fun updateOperationalStatus(status: OperationalStatus): Result<OperationalStatus>
+
+    /**
+     * Retrieves the locally persisted operational status of this unit.
+     */
+    suspend fun getMyOperationalStatus(): OperationalStatus?
 }

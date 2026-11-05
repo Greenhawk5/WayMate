@@ -42,7 +42,7 @@ export function errorResponse(
   code: string,
   message: string,
   details?: ApiFieldError[],
-  status: 400 | 401 | 403 | 404 | 409 | 422 | 429 | 500 | 503 = 400
+  status: 400 | 401 | 403 | 404 | 409 | 413 | 422 | 429 | 500 | 503 = 400
 ) {
   const requestId = c.get('requestId') || crypto.randomUUID();
   const payload: ApiErrorResponse = {

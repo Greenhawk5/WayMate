@@ -96,6 +96,9 @@ class WayMateDatabaseHelper(
                 """.trimIndent()
             )
 
+            // 6. Cached Points of Interest Table (Phase 11)
+            createCachedPointsTable(db)
+
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
@@ -103,25 +106,51 @@ class WayMateDatabaseHelper(
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // Incremental migrations will be placed here in future phases.
-        // For development v1, drop and recreate if schema increments.
-        db.execSQL("DROP TABLE IF EXISTS $TABLE_OFFLINE_QUEUE")
-        db.execSQL("DROP TABLE IF EXISTS $TABLE_CACHED_TEAMS")
-        db.execSQL("DROP TABLE IF EXISTS $TABLE_CACHED_MESSAGES")
-        db.execSQL("DROP TABLE IF EXISTS $TABLE_CACHED_STATUSES")
-        db.execSQL("DROP TABLE IF EXISTS $TABLE_METADATA")
-        onCreate(db)
+        if (oldVersion < 2) {
+            // Backward-compatible incremental migration from v1 to v2:
+            // Creates the cached_points table without dropping existing cached data
+            createCachedPointsTable(db)
+        }
+    }
+
+    private fun createCachedPointsTable(db: SQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS $TABLE_CACHED_POINTS (
+                $COL_POINT_ID TEXT PRIMARY KEY,
+                $COL_POINT_TEAM_ID TEXT NOT NULL,
+                $COL_POINT_TITLE TEXT NOT NULL,
+                $COL_POINT_DESCRIPTION TEXT NOT NULL DEFAULT '',
+                $COL_POINT_CATEGORY TEXT NOT NULL,
+                $COL_POINT_LATITUDE REAL NOT NULL,
+                $COL_POINT_LONGITUDE REAL NOT NULL,
+                $COL_POINT_CREATED_BY_ID TEXT NOT NULL,
+                $COL_POINT_CREATED_BY_CALLSIGN TEXT NOT NULL,
+                $COL_POINT_UPDATED_BY_ID TEXT NOT NULL,
+                $COL_POINT_UPDATED_BY_CALLSIGN TEXT NOT NULL,
+                $COL_POINT_IS_DELETED INTEGER NOT NULL DEFAULT 0,
+                $COL_POINT_VERSION INTEGER NOT NULL DEFAULT 1,
+                $COL_POINT_CREATED_AT INTEGER NOT NULL,
+                $COL_POINT_UPDATED_AT INTEGER NOT NULL,
+                $COL_POINT_IS_PENDING_SYNC INTEGER NOT NULL DEFAULT 0,
+                $COL_POINT_SYNCED_AT INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_points_team ON $TABLE_CACHED_POINTS($COL_POINT_TEAM_ID, $COL_POINT_IS_DELETED)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_points_updated ON $TABLE_CACHED_POINTS($COL_POINT_UPDATED_AT DESC)")
     }
 
     companion object {
         const val DATABASE_NAME = "waymate_offline.db"
-        const val DATABASE_VERSION = 1
+        const val DATABASE_VERSION = 2
 
         // Table names
         const val TABLE_OFFLINE_QUEUE = "offline_queue"
         const val TABLE_CACHED_TEAMS = "cached_teams"
         const val TABLE_CACHED_MESSAGES = "cached_messages"
         const val TABLE_CACHED_STATUSES = "cached_statuses"
+        const val TABLE_CACHED_POINTS = "cached_points"
         const val TABLE_METADATA = "sync_metadata"
 
         // offline_queue columns
@@ -165,6 +194,25 @@ class WayMateDatabaseHelper(
         const val COL_STATUS_IS_STALE = "is_stale"
         const val COL_STATUS_SYNCED_AT = "synced_at"
 
+        // cached_points columns
+        const val COL_POINT_ID = "id"
+        const val COL_POINT_TEAM_ID = "team_id"
+        const val COL_POINT_TITLE = "title"
+        const val COL_POINT_DESCRIPTION = "description"
+        const val COL_POINT_CATEGORY = "category"
+        const val COL_POINT_LATITUDE = "latitude"
+        const val COL_POINT_LONGITUDE = "longitude"
+        const val COL_POINT_CREATED_BY_ID = "created_by_user_id"
+        const val COL_POINT_CREATED_BY_CALLSIGN = "created_by_callsign"
+        const val COL_POINT_UPDATED_BY_ID = "updated_by_user_id"
+        const val COL_POINT_UPDATED_BY_CALLSIGN = "updated_by_callsign"
+        const val COL_POINT_IS_DELETED = "is_deleted"
+        const val COL_POINT_VERSION = "version"
+        const val COL_POINT_CREATED_AT = "created_at"
+        const val COL_POINT_UPDATED_AT = "updated_at"
+        const val COL_POINT_IS_PENDING_SYNC = "is_pending_sync"
+        const val COL_POINT_SYNCED_AT = "synced_at"
+
         // metadata columns
         const val COL_META_KEY = "meta_key"
         const val COL_META_VALUE = "meta_value"
@@ -172,5 +220,6 @@ class WayMateDatabaseHelper(
         const val META_KEY_TEAMS_SYNCED = "teams_last_synced"
         const val META_KEY_MESSAGES_SYNCED = "messages_last_synced"
         const val META_KEY_STATUSES_SYNCED = "statuses_last_synced"
+        const val META_KEY_POINTS_SYNCED = "points_last_synced"
     }
 }

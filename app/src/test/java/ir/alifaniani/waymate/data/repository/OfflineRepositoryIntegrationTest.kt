@@ -4,11 +4,13 @@ import ir.alifaniani.waymate.TestDispatcherProvider
 import ir.alifaniani.waymate.core.common.Result
 import ir.alifaniani.waymate.data.dto.AcknowledgeResponseDto
 import ir.alifaniani.waymate.data.dto.ApiResponseDto
+import ir.alifaniani.waymate.data.dto.CreateMemberDto
 import ir.alifaniani.waymate.data.dto.CreateTeamRequestDto
 import ir.alifaniani.waymate.data.dto.LiveUnitDto
 import ir.alifaniani.waymate.data.dto.SendMessageRequestDto
 import ir.alifaniani.waymate.data.dto.TacticalMessageDto
 import ir.alifaniani.waymate.data.dto.TeamDto
+import ir.alifaniani.waymate.data.dto.TeamMemberDto
 import ir.alifaniani.waymate.data.dto.UpdateOperationalStatusRequestDto
 import ir.alifaniani.waymate.data.dto.UpdateOperationalStatusResponseDto
 import ir.alifaniani.waymate.data.dto.UpdateTeamRequestDto
@@ -179,6 +181,8 @@ class OfflineRepositoryIntegrationTest {
             override suspend fun getTeamById(id: String): Response<ApiResponseDto<TeamDto>> = throw NotImplementedError()
             override suspend fun createTeam(request: CreateTeamRequestDto): Response<ApiResponseDto<TeamDto>> = throw NotImplementedError()
             override suspend fun updateTeam(id: String, request: UpdateTeamRequestDto): Response<ApiResponseDto<TeamDto>> = throw NotImplementedError()
+            override suspend fun addMember(teamId: String, request: CreateMemberDto): Response<ApiResponseDto<TeamMemberDto>> = throw NotImplementedError()
+            override suspend fun removeMember(teamId: String, memberId: String): Response<ApiResponseDto<Map<String, String>>> = throw NotImplementedError()
         }
 
         val repository = RealTeamRepository(
@@ -203,6 +207,8 @@ class OfflineRepositoryIntegrationTest {
                 throw IOException("Network offline")
             }
             override suspend fun updateTeam(id: String, request: UpdateTeamRequestDto): Response<ApiResponseDto<TeamDto>> = throw NotImplementedError()
+            override suspend fun addMember(teamId: String, request: CreateMemberDto): Response<ApiResponseDto<TeamMemberDto>> = throw NotImplementedError()
+            override suspend fun removeMember(teamId: String, memberId: String): Response<ApiResponseDto<Map<String, String>>> = throw NotImplementedError()
         }
 
         val repository = RealTeamRepository(

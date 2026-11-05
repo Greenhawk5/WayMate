@@ -123,4 +123,40 @@ class FakeTeamRepository(
         syntheticTeams[index] = updated
         return Result.Success(updated)
     }
+
+    override suspend fun addMember(
+        teamId: String,
+        fullName: String,
+        callsign: String,
+        roleInTeam: String
+    ): Result<TeamMember> {
+        if (simulatedDelayMs > 0) delay(simulatedDelayMs)
+        if (shouldFail) return Result.Error(failureError, failureMessage)
+        val index = syntheticTeams.indexOfFirst { it.id == teamId }
+        if (index == -1) return Result.Error(Exception("گروه عملیاتی یافت نشد"), "گروه عملیاتی یافت نشد")
+        val current = syntheticTeams[index]
+        val newMember = TeamMember(
+            id = "mem_${System.currentTimeMillis()}",
+            fullName = fullName,
+            callsign = callsign,
+            roleInTeam = roleInTeam
+        )
+        val updatedMembers = current.members + newMember
+        syntheticTeams[index] = current.copy(members = updatedMembers, memberCount = updatedMembers.size)
+        return Result.Success(newMember)
+    }
+
+    override suspend fun removeMember(
+        teamId: String,
+        memberId: String
+    ): Result<Unit> {
+        if (simulatedDelayMs > 0) delay(simulatedDelayMs)
+        if (shouldFail) return Result.Error(failureError, failureMessage)
+        val index = syntheticTeams.indexOfFirst { it.id == teamId }
+        if (index == -1) return Result.Error(Exception("گروه عملیاتی یافت نشد"), "گروه عملیاتی یافت نشد")
+        val current = syntheticTeams[index]
+        val updatedMembers = current.members.filterNot { it.id == memberId }
+        syntheticTeams[index] = current.copy(members = updatedMembers, memberCount = updatedMembers.size)
+        return Result.Success(Unit)
+    }
 }

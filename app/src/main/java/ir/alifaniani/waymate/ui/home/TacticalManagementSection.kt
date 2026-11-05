@@ -62,6 +62,8 @@ fun TacticalManagementSection(
     onCreateTeam: (name: String, leadUserId: String, vehicleType: String, vehiclePlate: String, equipment: String) -> Unit,
     onToggleTeamStatus: (Team) -> Unit,
     onDismissFeedback: () -> Unit,
+    onAddMember: (teamId: String, fullName: String, callsign: String, roleInTeam: String) -> Unit = { _, _, _, _ -> },
+    onRemoveMember: (teamId: String, memberId: String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     if (currentUser.role == UserRole.TEAM_LEAD) {
@@ -72,6 +74,7 @@ fun TacticalManagementSection(
     var selectedTab by remember { mutableIntStateOf(0) }
     var showCreateUserDialog by remember { mutableStateOf(false) }
     var showCreateTeamDialog by remember { mutableStateOf(false) }
+    var selectedTeamForAddMember by remember { mutableStateOf<Team?>(null) }
     var pendingUserDeactivation by remember { mutableStateOf<ManagedUser?>(null) }
     var pendingTeamDeactivation by remember { mutableStateOf<Team?>(null) }
 
@@ -204,7 +207,9 @@ fun TacticalManagementSection(
                             } else {
                                 onToggleTeamStatus(team)
                             }
-                        }
+                        },
+                        onAddMemberClicked = { selectedTeamForAddMember = it },
+                        onRemoveMember = onRemoveMember
                     )
                     2 -> SystemReportsTab(
                         stats = uiState.systemStats,
@@ -223,7 +228,9 @@ fun TacticalManagementSection(
                             } else {
                                 onToggleTeamStatus(team)
                             }
-                        }
+                        },
+                        onAddMemberClicked = { selectedTeamForAddMember = it },
+                        onRemoveMember = onRemoveMember
                     )
                     1 -> CommanderStatsTab(stats = uiState.systemStats)
                 }
@@ -299,6 +306,18 @@ fun TacticalManagementSection(
                     Text("انصراف")
                 }
             }
+        )
+    }
+
+    selectedTeamForAddMember?.let { team ->
+        AddMemberDialog(
+            teamName = team.name,
+            onConfirm = { fullName, callsign, roleInTeam ->
+                val targetId = team.id
+                selectedTeamForAddMember = null
+                onAddMember(targetId, fullName, callsign, roleInTeam)
+            },
+            onDismiss = { selectedTeamForAddMember = null }
         )
     }
 }
@@ -408,7 +427,9 @@ private fun TeamsManagementTab(
     teams: List<Team>,
     availableLeads: List<ManagedUser>,
     onAddTeamClicked: () -> Unit,
-    onToggleStatus: (Team) -> Unit
+    onToggleStatus: (Team) -> Unit,
+    onAddMemberClicked: (Team) -> Unit,
+    onRemoveMember: (teamId: String, memberId: String) -> Unit
 ) {
     Column {
         Row(
@@ -439,7 +460,12 @@ private fun TeamsManagementTab(
             )
         } else {
             teams.forEach { team ->
-                TeamManagementCard(team = team, onToggleStatus = { onToggleStatus(team) })
+                TeamManagementCard(
+                    team = team,
+                    onToggleStatus = { onToggleStatus(team) },
+                    onAddMemberClicked = { onAddMemberClicked(team) },
+                    onRemoveMember = { memberId -> onRemoveMember(team.id, memberId) }
+                )
                 Spacer(modifier = Modifier.height(8.dp))
             }
         }
@@ -449,8 +475,12 @@ private fun TeamsManagementTab(
 @Composable
 private fun TeamManagementCard(
     team: Team,
-    onToggleStatus: () -> Unit
+    onToggleStatus: () -> Unit,
+    onAddMemberClicked: () -> Unit,
+    onRemoveMember: (memberId: String) -> Unit
 ) {
+    var isExpanded by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
@@ -490,13 +520,150 @@ private fun TeamManagementCard(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Text(
-                text = "تعداد اعضا: ${team.members.size} نفر",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary
-            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "تعداد اعضا: ${team.members.size} نفر",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = if (isExpanded) "بستن اعضا ▲" else "مشاهده اعضا ▼",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .clickable { isExpanded = !isExpanded }
+                            .padding(2.dp)
+                    )
+                    Text(
+                        text = "+ افزودن عضو",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .clickable { onAddMemberClicked() }
+                            .padding(2.dp)
+                    )
+                }
+            }
+
+            if (isExpanded) {
+                Spacer(modifier = Modifier.height(8.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                Spacer(modifier = Modifier.height(6.dp))
+
+                if (team.members.isEmpty()) {
+                    Text(
+                        text = "هیچ عضوی در این گروه ثبت نشده است.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                } else {
+                    team.members.forEach { member ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 3.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "${member.callsign} (${member.fullName})",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = member.roleInTeam,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Text(
+                                text = "حذف",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier
+                                    .clickable { onRemoveMember(member.id) }
+                                    .padding(4.dp)
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
+}
+
+@Composable
+private fun AddMemberDialog(
+    teamName: String,
+    onConfirm: (fullName: String, callsign: String, roleInTeam: String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var fullName by remember { mutableStateOf("") }
+    var callsign by remember { mutableStateOf("") }
+    var roleInTeam by remember { mutableStateOf("عضو عملیاتی") }
+    var errorText by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = "افزودن عضو به $teamName", fontWeight = FontWeight.Bold) },
+        text = {
+            Column {
+                if (errorText != null) {
+                    Text(text = errorText!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+                TacticalTextField(
+                    value = fullName,
+                    onValueChange = { fullName = it },
+                    label = "نام و نام خانوادگی",
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                TacticalTextField(
+                    value = callsign,
+                    onValueChange = { callsign = it },
+                    label = "شناسه تماس تاکتیکی (Callsign)",
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                TacticalTextField(
+                    value = roleInTeam,
+                    onValueChange = { roleInTeam = it },
+                    label = "نقش در گروه (مثلاً امدادگر، دیده‌بان، راننده)",
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    if (fullName.isBlank() || callsign.isBlank()) {
+                        errorText = "نام کامل و شناسه تماس الزامی هستند"
+                    } else {
+                        onConfirm(fullName.trim(), callsign.trim(), roleInTeam.trim())
+                    }
+                }
+            ) {
+                Text("ثبت عضو")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("انصراف")
+            }
+        }
+    )
 }
 
 @Composable

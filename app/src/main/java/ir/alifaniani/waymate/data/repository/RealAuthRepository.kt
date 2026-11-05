@@ -87,7 +87,7 @@ class RealAuthRepository(
             // Local session purge must always succeed regardless of remote connectivity
         } finally {
             sessionStorage.clearSession()
-            offlineStorage?.clearCache()
+            offlineStorage?.clearAll()
             _currentUser.value = null
         }
         Result.Success(Unit)

@@ -2,21 +2,27 @@ package ir.alifaniani.waymate.data.sync
 
 import ir.alifaniani.waymate.core.common.DefaultDispatcherProvider
 import ir.alifaniani.waymate.core.common.DispatcherProvider
+import ir.alifaniani.waymate.data.dto.CreatePointRequestDto
 import ir.alifaniani.waymate.data.dto.CreateTeamRequestDto
 import ir.alifaniani.waymate.data.dto.SendMessageRequestDto
 import ir.alifaniani.waymate.data.dto.UpdateOperationalStatusRequestDto
+import ir.alifaniani.waymate.data.dto.UpdatePointRequestDto
 import ir.alifaniani.waymate.data.local.OfflineStorage
 import ir.alifaniani.waymate.data.local.model.ActionType
 import ir.alifaniani.waymate.data.local.model.QueueStatus
 import ir.alifaniani.waymate.data.local.model.QueuedAction
+import ir.alifaniani.waymate.data.mapper.toDomain
 import ir.alifaniani.waymate.data.network.MessageApiService
+import ir.alifaniani.waymate.data.network.PointOfInterestApiService
 import ir.alifaniani.waymate.data.network.StatusApiService
 import ir.alifaniani.waymate.data.network.TeamApiService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+
 
 /**
  * Result metrics returned after a queue synchronization run.
@@ -33,12 +39,14 @@ data class SyncResult(
  */
 class OfflineSyncManager(
     private val offlineStorage: OfflineStorage,
-    private val messageApiService: MessageApiService,
-    private val statusApiService: StatusApiService,
-    private val teamApiService: TeamApiService,
+    private val messageApiService: MessageApiService? = null,
+    private val statusApiService: StatusApiService? = null,
+    private val teamApiService: TeamApiService? = null,
+    private val pointApiService: PointOfInterestApiService? = null,
     private val dispatcherProvider: DispatcherProvider = DefaultDispatcherProvider(),
     private val json: Json = Json { ignoreUnknownKeys = true }
 ) {
+
 
     private val _isSyncing = MutableStateFlow(false)
     val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
@@ -117,6 +125,7 @@ class OfflineSyncManager(
         return try {
             when (action.actionType) {
                 ActionType.SEND_MESSAGE -> {
+                    if (messageApiService == null) return ActionExecutionResult.UnrecoverableError("سرویس پیام در دسترس نیست")
                     val request = json.decodeFromString<SendMessageRequestDto>(action.payloadJson)
                     val response = messageApiService.sendMessage(request)
                     if (response.isSuccessful && response.body()?.success == true) {
@@ -128,6 +137,7 @@ class OfflineSyncManager(
                     }
                 }
                 ActionType.UPDATE_STATUS -> {
+                    if (statusApiService == null) return ActionExecutionResult.UnrecoverableError("سرویس وضعیت در دسترس نیست")
                     val request = json.decodeFromString<UpdateOperationalStatusRequestDto>(action.payloadJson)
                     val response = statusApiService.updateOperationalStatus(request)
                     if (response.isSuccessful && response.body()?.success == true) {
@@ -139,6 +149,7 @@ class OfflineSyncManager(
                     }
                 }
                 ActionType.ACK_MESSAGE -> {
+                    if (messageApiService == null) return ActionExecutionResult.UnrecoverableError("سرویس پیام در دسترس نیست")
                     val messageId = action.payloadJson
                     val response = messageApiService.acknowledgeMessage(messageId)
                     if (response.isSuccessful && response.body()?.success == true) {
@@ -150,6 +161,7 @@ class OfflineSyncManager(
                     }
                 }
                 ActionType.CREATE_TEAM -> {
+                    if (teamApiService == null) return ActionExecutionResult.UnrecoverableError("سرویس تیم در دسترس نیست")
                     val request = json.decodeFromString<CreateTeamRequestDto>(action.payloadJson)
                     val response = teamApiService.createTeam(request)
                     if (response.isSuccessful && response.body()?.success == true) {
@@ -160,7 +172,80 @@ class OfflineSyncManager(
                         ActionExecutionResult.NetworkFailure("خطای سرور (${response.code()})")
                     }
                 }
+                ActionType.CREATE_POINT -> {
+                    if (pointApiService == null) {
+                        ActionExecutionResult.UnrecoverableError("سرویس نقاط در دسترس نیست")
+                    } else {
+                        val payload = json.decodeFromString<CreatePointQueuePayload>(action.payloadJson)
+                        val request = CreatePointRequestDto(
+                            title = payload.title,
+                            description = payload.description,
+                            category = payload.category,
+                            latitude = payload.latitude,
+                            longitude = payload.longitude,
+                            teamId = payload.teamId
+                        )
+                        val response = pointApiService.createPoint(request)
+                        if (response.isSuccessful && response.body()?.success == true) {
+                            val created = response.body()?.data?.toDomain()
+                            if (created != null) {
+                                offlineStorage.saveLocalPoint(created.copy(isPendingSync = false))
+                            }
+                            ActionExecutionResult.Success
+                        } else if (response.code() in 400..499) {
+                            ActionExecutionResult.UnrecoverableError("خطای اعتبارسنجی (${response.code()}) در ثبت نقطه")
+                        } else {
+                            ActionExecutionResult.NetworkFailure("خطای سرور (${response.code()})")
+                        }
+                    }
+                }
+                ActionType.UPDATE_POINT -> {
+                    if (pointApiService == null) {
+                        ActionExecutionResult.UnrecoverableError("سرویس نقاط در دسترس نیست")
+                    } else {
+                        val payload = json.decodeFromString<UpdatePointQueuePayload>(action.payloadJson)
+                        val request = UpdatePointRequestDto(
+                            title = payload.title,
+                            description = payload.description,
+                            category = payload.category,
+                            latitude = payload.latitude,
+                            longitude = payload.longitude,
+                            version = payload.version
+                        )
+                        val response = pointApiService.updatePoint(payload.id, request)
+                        if (response.isSuccessful && response.body()?.success == true) {
+                            val updated = response.body()?.data?.toDomain()
+                            if (updated != null) {
+                                offlineStorage.saveLocalPoint(updated.copy(isPendingSync = false))
+                            }
+                            ActionExecutionResult.Success
+                        } else if (response.code() == 409) {
+                            ActionExecutionResult.UnrecoverableError("تعارض ویرایش همزمان (نسخه نقطه تغییر یافته است)")
+                        } else if (response.code() in 400..499) {
+                            ActionExecutionResult.UnrecoverableError("خطای اعتبارسنجی (${response.code()}) در ویرایش نقطه")
+                        } else {
+                            ActionExecutionResult.NetworkFailure("خطای سرور (${response.code()})")
+                        }
+                    }
+                }
+                ActionType.DELETE_POINT -> {
+                    if (pointApiService == null) {
+                        ActionExecutionResult.UnrecoverableError("سرویس نقاط در دسترس نیست")
+                    } else {
+                        val payload = json.decodeFromString<DeletePointQueuePayload>(action.payloadJson)
+                        val response = pointApiService.deletePoint(payload.id)
+                        if ((response.isSuccessful && response.body()?.success == true) || response.code() == 404) {
+                            offlineStorage.markPointDeletedLocally(payload.id)
+                            ActionExecutionResult.Success
+                        } else if (response.code() in 400..499) {
+                            ActionExecutionResult.UnrecoverableError("خطای اعتبارسنجی (${response.code()}) در حذف نقطه")
+                        } else {
+                            ActionExecutionResult.NetworkFailure("خطای سرور (${response.code()})")
+                        }
+                    }
+                }
             }
+
         } catch (e: Exception) {
             ActionExecutionResult.NetworkFailure(e.localizedMessage ?: "عدم برقراری ارتباط با شبکه")
         }
@@ -172,3 +257,30 @@ class OfflineSyncManager(
         data class NetworkFailure(val errorMessage: String) : ActionExecutionResult
     }
 }
+
+@Serializable
+data class CreatePointQueuePayload(
+    val localId: String,
+    val title: String,
+    val description: String,
+    val category: String,
+    val latitude: Double,
+    val longitude: Double,
+    val teamId: String? = null
+)
+
+@Serializable
+data class UpdatePointQueuePayload(
+    val id: String,
+    val title: String,
+    val description: String,
+    val category: String,
+    val latitude: Double,
+    val longitude: Double,
+    val version: Int
+)
+
+@Serializable
+data class DeletePointQueuePayload(
+    val id: String
+)

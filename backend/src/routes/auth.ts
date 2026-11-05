@@ -3,12 +3,26 @@ import { Bindings, Variables, DbUser } from '../types.js';
 import { successResponse, errorResponse } from '../utils/response.js';
 import { verifyPassword, signJwt } from '../utils/crypto.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { loginRateLimiter } from '../middleware/rateLimiter.js';
 
 export const authRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 const DEFAULT_DEV_JWT_SECRET = 'waymate-tactical-dev-insecure-secret-key-32bytes-min';
 
 authRoutes.post('/login', async (c) => {
+  const ip = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for') || 'local';
+  const rateCheck = loginRateLimiter.check(ip);
+  if (!rateCheck.allowed) {
+    c.res.headers.set('Retry-After', Math.ceil(rateCheck.resetInMs / 1000).toString());
+    return errorResponse(
+      c,
+      'TOO_MANY_REQUESTS',
+      'تعداد تلاش‌های ناموفق ورود بیش از سقف مجاز است. لطفاً ۱ دقیقه بعد مجدداً تلاش نمایید',
+      undefined,
+      429
+    );
+  }
+
   let body: any;
   try {
     body = await c.req.json();
@@ -40,8 +54,6 @@ authRoutes.post('/login', async (c) => {
     .prepare('SELECT id, username, password_hash, role, callsign, is_active, created_at, updated_at FROM users WHERE username = ?')
     .bind(username.trim())
     .first<DbUser>();
-
-  const ip = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for') || 'local';
 
   if (!user || user.is_active !== 1) {
     // Record audit failure
@@ -85,6 +97,9 @@ authRoutes.post('/login', async (c) => {
     .bind(crypto.randomUUID(), user.id, 'AUTH_LOGIN_SUCCESS', 'USER', user.id, ip, JSON.stringify({ role: user.role }), Date.now())
     .run()
     .catch(() => {});
+
+  // Reset rate limiter on successful authentication
+  loginRateLimiter.reset(ip);
 
   return successResponse(c, {
     token,

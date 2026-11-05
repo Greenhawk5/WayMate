@@ -81,6 +81,7 @@ class RealStatusRepository(
 
     override suspend fun updateOperationalStatus(status: OperationalStatus): Result<OperationalStatus> =
         withContext(dispatcherProvider.io) {
+            offlineStorage?.saveMyOperationalStatus(status)
             val request = UpdateOperationalStatusRequestDto(operationalStatus = status.name)
             try {
                 val response = statusApiService.updateOperationalStatus(request)
@@ -110,6 +111,9 @@ class RealStatusRepository(
                 enqueueOfflineStatus(request, status)
             }
         }
+
+    override suspend fun getMyOperationalStatus(): OperationalStatus? =
+        offlineStorage?.getMyOperationalStatus()
 
     private suspend fun enqueueOfflineStatus(
         request: UpdateOperationalStatusRequestDto,

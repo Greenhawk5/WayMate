@@ -71,6 +71,30 @@ interface OfflineStorage {
     suspend fun getStatusesLastSynced(): Long
 
     // ==========================================
+    // Cached Points of Interest (Phase 11)
+    // ==========================================
+
+    suspend fun savePoints(points: List<ir.alifaniani.waymate.domain.model.PointOfInterest>)
+
+    suspend fun getCachedPoints(teamId: String? = null): List<ir.alifaniani.waymate.domain.model.PointOfInterest>
+
+    suspend fun getCachedPointById(id: String): ir.alifaniani.waymate.domain.model.PointOfInterest?
+
+    suspend fun saveLocalPoint(point: ir.alifaniani.waymate.domain.model.PointOfInterest)
+
+    suspend fun markPointDeletedLocally(id: String)
+
+    suspend fun getPointsLastSynced(): Long
+
+    // ==========================================
+    // User Operational Status Persistence
+    // ==========================================
+
+    suspend fun saveMyOperationalStatus(status: ir.alifaniani.waymate.domain.model.OperationalStatus)
+
+    suspend fun getMyOperationalStatus(): ir.alifaniani.waymate.domain.model.OperationalStatus?
+
+    // ==========================================
     // Retention, Pruning & Session Cleanup
     // ==========================================
 

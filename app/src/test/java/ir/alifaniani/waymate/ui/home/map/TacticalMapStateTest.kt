@@ -234,4 +234,157 @@ class TacticalMapStateTest {
         val blankResult = AssetGisLayerRepository.parseJsonStream(blankStream)
         assertTrue("Blank stream should return empty list", blankResult.isEmpty())
     }
+
+    @Test
+    fun hikingRoutesLayer_enabledByDefaultAndCanBeToggled() {
+        var state = TacticalMapUiState()
+        assertTrue("Hiking routes layer should be enabled by default", state.isHikingRoutesEnabled)
+        assertTrue("Hiking routes should be loaded", state.hikingRoutes.isNotEmpty())
+
+        state = state.toggleLayer("hiking_routes")
+        assertFalse("Hiking routes layer should be disabled after toggle", state.isHikingRoutesEnabled)
+
+        state = state.toggleLayer("hiking_routes")
+        assertTrue("Hiking routes layer should be re-enabled after second toggle", state.isHikingRoutesEnabled)
+    }
+
+    @Test
+    fun simulatedHikerState_storesCoordinatesAndBearing() {
+        var state = TacticalMapUiState()
+        assertNull(state.simulatedHikerPosition)
+        assertEquals(0f, state.simulatedHikerBearing, 0.001f)
+
+        state = state.copy(
+            simulatedHikerPosition = GeoPoint(53.6008, 28.5303),
+            simulatedHikerBearing = 145f
+        )
+        assertNotNull(state.simulatedHikerPosition)
+        assertEquals(53.6008, state.simulatedHikerPosition!!.longitude, 0.0001)
+        assertEquals(28.5303, state.simulatedHikerPosition!!.latitude, 0.0001)
+        assertEquals(145f, state.simulatedHikerBearing, 0.001f)
+    }
+
+    @Test
+    fun pointOfInterestSelection_updatesSelectedPointAndCoordinates() {
+        val testPoint = ir.alifaniani.waymate.domain.model.PointOfInterest(
+            id = "poi_test",
+            teamId = "team_alpha",
+            title = "چشمه سنگی",
+            description = "محل استراحت",
+            category = ir.alifaniani.waymate.domain.model.PointCategory.WATER_SOURCE,
+            latitude = 28.5300,
+            longitude = 53.6000,
+            createdByUserId = "u1",
+            createdByCallsign = "راهنما ۱",
+            updatedByUserId = "u1",
+            updatedByCallsign = "راهنما ۱",
+            createdAt = 1000L,
+            updatedAt = 1000L
+        )
+
+        var state = TacticalMapUiState(pointsOfInterest = listOf(testPoint))
+        assertNull(state.selectedPointOfInterest)
+
+        state = state.copy(selectedPointOfInterest = testPoint)
+        assertEquals("poi_test", state.selectedPointOfInterest?.id)
+        assertEquals("چشمه سنگی", state.selectedPointOfInterest?.title)
+    }
+
+    @Test
+    fun groupMemberLocations_layerTogglingAndSelection() {
+        val member = ir.alifaniani.waymate.domain.model.GroupMemberLocation(
+            userId = "usr_42",
+            callsign = "زاگرس",
+            teamId = "team_alpha",
+            latitude = 28.5350,
+            longitude = 53.6050,
+            accuracyMeters = 4.5f,
+            timestamp = System.currentTimeMillis()
+        )
+
+        var state = TacticalMapUiState(groupMemberLocations = listOf(member))
+        assertTrue("Group locations layer should be enabled by default", state.isGroupLocationsEnabled)
+        assertNull("No member selected initially", state.selectedGroupMember)
+        assertEquals(1, state.groupMemberLocations.size)
+
+        // Select member
+        state = state.copy(selectedGroupMember = member)
+        assertEquals("usr_42", state.selectedGroupMember?.userId)
+        assertEquals("زاگرس", state.selectedGroupMember?.callsign)
+
+        // Toggle layer off
+        state = state.toggleLayer("live_group_locations")
+        assertFalse("Group locations layer should now be disabled", state.isGroupLocationsEnabled)
+
+        // Toggle layer back on
+        state = state.toggleLayer("live_group_locations")
+        assertTrue("Group locations layer should be re-enabled", state.isGroupLocationsEnabled)
+    }
+
+    @Test
+    fun mapCoordinateTransformation_rotationInvariance() {
+        val centerLat = 28.5303
+        val centerLon = 53.6008
+        val zoomLevel = 14
+        val userZoomScale = 1.5f
+        val effectiveZoom = (zoomLevel.toFloat() / 14f) * userZoomScale
+        val scale = 35000f * effectiveZoom
+        val cosLat = kotlin.math.cos(Math.toRadians(centerLat)).toFloat()
+
+        val targetLat = 28.5350
+        val targetLon = 53.6050
+
+        val dx = (targetLon - centerLon).toFloat() * scale * cosLat
+        val dy = -(targetLat - centerLat).toFloat() * scale
+
+        // Test with different rotation angles: 0, 45, 90, 180, 270 degrees
+        val testAngles = listOf(0f, 45f, 90f, 135f, 180f, 270f, 315f)
+        for (rotationDegrees in testAngles) {
+            val rad = Math.toRadians(rotationDegrees.toDouble())
+            // Forward rotation
+            val rotX = (dx * kotlin.math.cos(rad) - dy * kotlin.math.sin(rad)).toFloat()
+            val rotY = (dx * kotlin.math.sin(rad) + dy * kotlin.math.cos(rad)).toFloat()
+
+            // Inverse (unrotation)
+            val unrotX = (rotX * kotlin.math.cos(rad) + rotY * kotlin.math.sin(rad)).toFloat()
+            val unrotY = (-rotX * kotlin.math.sin(rad) + rotY * kotlin.math.cos(rad)).toFloat()
+
+            assertEquals("Unrotated X must match original dx for angle $rotationDegrees", dx, unrotX, 0.01f)
+            assertEquals("Unrotated Y must match original dy for angle $rotationDegrees", dy, unrotY, 0.01f)
+        }
+    }
+
+    @Test
+    fun mapCoordinateTransformation_scaleAndZoomBounds() {
+        val baseZoom = 14
+        val minScale = 0.4f
+        val maxScale = 3.5f
+
+        val effectiveMinZoom = (baseZoom.toFloat() / 14f) * minScale
+        val effectiveMaxZoom = (baseZoom.toFloat() / 14f) * maxScale
+
+        assertEquals(0.4f, effectiveMinZoom, 0.001f)
+        assertEquals(3.5f, effectiveMaxZoom, 0.001f)
+
+        val baseScale = 35000f * (baseZoom.toFloat() / 14f)
+        assertEquals(35000f, baseScale, 0.01f)
+    }
+
+    @Test
+    fun groupMemberLocation_stalenessCalculation() {
+        val now = 1700000100000L
+        val freshMember = ir.alifaniani.waymate.domain.model.GroupMemberLocation(
+            userId = "usr_01",
+            callsign = "شاهین",
+            teamId = "team_alpha",
+            latitude = 28.53,
+            longitude = 53.60,
+            accuracyMeters = 5f,
+            timestamp = now - 30_000L
+        )
+        assertFalse("30s old fix should not be stale with 60s threshold", freshMember.isStale(now, 60_000L))
+
+        val staleMember = freshMember.copy(timestamp = now - 75_000L)
+        assertTrue("75s old fix must be marked stale with 60s threshold", staleMember.isStale(now, 60_000L))
+    }
 }

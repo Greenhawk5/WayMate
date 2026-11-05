@@ -46,6 +46,8 @@ class OfflineSyncManagerTest {
             return Response.success(ApiResponseDto(success = true, data = TeamDto(id = "team_new", name = request.name)))
         }
         override suspend fun updateTeam(id: String, request: UpdateTeamRequestDto): Response<ApiResponseDto<TeamDto>> = throw NotImplementedError()
+        override suspend fun addMember(teamId: String, request: ir.alifaniani.waymate.data.dto.CreateMemberDto): Response<ApiResponseDto<ir.alifaniani.waymate.data.dto.TeamMemberDto>> = throw NotImplementedError()
+        override suspend fun removeMember(teamId: String, memberId: String): Response<ApiResponseDto<Map<String, String>>> = throw NotImplementedError()
     }
 
     private val dummyStatusApi = object : StatusApiService {

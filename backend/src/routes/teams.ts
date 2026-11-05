@@ -373,9 +373,12 @@ teamRoutes.post('/:id/members', requireRoles('OWNER', 'COMMANDER'), async (c) =>
     return errorResponse(c, 'INTERNAL_ERROR', 'اتصال به پایگاه داده در دسترس نیست', undefined, 500);
   }
 
-  const team = await db.prepare('SELECT id FROM teams WHERE id = ?').bind(teamId).first();
+  const team = await db.prepare('SELECT id, is_active FROM teams WHERE id = ?').bind(teamId).first<{ id: string; is_active: number }>();
   if (!team) {
     return errorResponse(c, 'NOT_FOUND', `تیم عملیاتی با شناسه '${teamId}' یافت نشد`, undefined, 404);
+  }
+  if (team.is_active !== 1) {
+    return errorResponse(c, 'BAD_REQUEST', 'امکان افزودن عضو به گروه غیرفعال وجود ندارد', undefined, 400);
   }
 
   let body: any;
@@ -386,13 +389,16 @@ teamRoutes.post('/:id/members', requireRoles('OWNER', 'COMMANDER'), async (c) =>
   }
 
   const { full_name, callsign, role_in_team } = body;
-  if (!full_name || !callsign) {
-    return errorResponse(c, 'VALIDATION_FAILED', 'نام کامل و شناسه تماس الزامی هستند', undefined, 400);
+  if (!full_name || typeof full_name !== 'string' || full_name.trim().length === 0 || full_name.length > 100) {
+    return errorResponse(c, 'VALIDATION_FAILED', 'نام کامل الزامی بوده و حداکثر ۱۰۰ کاراکتر است', [{ field: 'full_name', issue: 'نام نامعتبر است' }], 400);
+  }
+  if (!callsign || typeof callsign !== 'string' || callsign.trim().length === 0 || callsign.length > 100) {
+    return errorResponse(c, 'VALIDATION_FAILED', 'شناسه تماس الزامی بوده و حداکثر ۱۰۰ کاراکتر است', [{ field: 'callsign', issue: 'شناسه تماس نامعتبر است' }], 400);
   }
 
   const memberId = `mem_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
   const now = Date.now();
-  const cleanRole = (role_in_team || 'عضو تیم').toString().trim();
+  const cleanRole = (role_in_team || 'عضو تیم').toString().trim().slice(0, 100);
 
   await db
     .prepare('INSERT INTO team_members (id, team_id, full_name, callsign, role_in_team, created_at) VALUES (?, ?, ?, ?, ?, ?)')

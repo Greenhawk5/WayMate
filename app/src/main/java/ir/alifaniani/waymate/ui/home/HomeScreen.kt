@@ -28,6 +28,11 @@ import ir.alifaniani.waymate.ui.common.TacticalOutlinedButton
 import ir.alifaniani.waymate.ui.common.TacticalScreenContainer
 import ir.alifaniani.waymate.ui.common.TacticalStatusBadge
 
+import ir.alifaniani.waymate.domain.model.PointCategory
+import ir.alifaniani.waymate.domain.model.PointOfInterest
+import ir.alifaniani.waymate.ui.home.map.PointOfInterestDialog
+
+import ir.alifaniani.waymate.domain.model.GroupMemberLocation
 import ir.alifaniani.waymate.domain.model.ManagedUser
 import ir.alifaniani.waymate.domain.model.Team
 import ir.alifaniani.waymate.domain.model.OperationalStatus
@@ -53,6 +58,22 @@ fun HomeScreen(
     onDismissFeedback: () -> Unit = {},
     onSyncQueue: () -> Unit = {},
     onDismissSyncFeedback: () -> Unit = {},
+    onSelectPoint: (PointOfInterest?) -> Unit = {},
+    onOpenCreatePointDialog: () -> Unit = {},
+    onOpenEditPointDialog: (PointOfInterest) -> Unit = {},
+    onDeletePoint: (String) -> Unit = {},
+    onConfirmCreatePoint: (title: String, description: String, category: PointCategory, latitude: Double, longitude: Double) -> Unit = { _, _, _, _, _ -> },
+    onConfirmUpdatePoint: (id: String, title: String, description: String, category: PointCategory, latitude: Double, longitude: Double, version: Int) -> Unit = { _, _, _, _, _, _, _ -> },
+    onDismissPointDialog: () -> Unit = {},
+    onDismissPointFeedback: () -> Unit = {},
+    onSelectGroupMember: (GroupMemberLocation?) -> Unit = {},
+    onStartSharing: () -> Unit = {},
+    onStopSharing: () -> Unit = {},
+    onDismissLocationRationale: () -> Unit = {},
+    onConfirmLocationRationale: () -> Unit = {},
+    onDismissLocationPermissionDenied: () -> Unit = {},
+    onOpenAppSettings: () -> Unit = {},
+    onRetryPermissionRequest: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     TacticalScreenContainer(modifier = modifier) {
@@ -125,8 +146,66 @@ fun HomeScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        if (homeUiState.pointFeedbackMessage != null) {
+            TacticalFeedbackBanner(
+                title = "نقاط مشترک و نشانه‌های گروه",
+                message = homeUiState.pointFeedbackMessage,
+                type = BannerType.INFO
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+        }
+
+        // Real-Time Consent-Based Location Sharing Control Card
+        LocationSharingControlCard(
+            sharingState = homeUiState.locationSharingState,
+            onStartSharing = onStartSharing,
+            onStopSharing = onStopSharing
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
         // Operational Tactical Map & Link Health Section
-        TacticalMapAndLinkSection()
+        TacticalMapAndLinkSection(
+            points = homeUiState.points,
+            selectedPoint = homeUiState.selectedPoint,
+            onSelectPoint = onSelectPoint,
+            groupMembers = homeUiState.locationSharingState.activeSharers,
+            selectedGroupMember = homeUiState.selectedGroupMember,
+            onSelectGroupMember = onSelectGroupMember,
+            onOpenCreatePointDialog = onOpenCreatePointDialog,
+            onOpenEditPointDialog = onOpenEditPointDialog,
+            onDeletePoint = onDeletePoint,
+            offlineQueueCount = homeUiState.offlineQueueCount,
+            lastSyncTimestamp = homeUiState.lastSyncTimestamp
+        )
+
+        // Point of Interest Create / Edit Dialog
+        if (homeUiState.isPointDialogVisible) {
+            PointOfInterestDialog(
+                initialPoint = homeUiState.editingPoint,
+                onConfirmCreate = onConfirmCreatePoint,
+                onConfirmUpdate = onConfirmUpdatePoint,
+                onDismiss = onDismissPointDialog
+            )
+        }
+
+        // Location Permission Rationale Dialog (Pre-permission explanation)
+        if (homeUiState.isLocationPermissionRationaleVisible) {
+            LocationPermissionRationaleDialog(
+                onConfirm = onConfirmLocationRationale,
+                onDismiss = onDismissLocationRationale
+            )
+        }
+
+        // Location Permission Denied Dialog (With settings redirect if permanently denied)
+        if (homeUiState.isLocationPermissionDenied) {
+            LocationPermissionDeniedDialog(
+                isPermanentlyDenied = homeUiState.isLocationPermissionPermanentlyDenied,
+                onOpenSettings = onOpenAppSettings,
+                onRetry = onRetryPermissionRequest,
+                onDismiss = onDismissLocationPermissionDenied
+            )
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -169,7 +248,7 @@ fun HomeScreen(
 
         TacticalFeedbackBanner(
             title = "وضعیت پیاده‌سازی و یکپارچگی",
-            message = "اطلاعات هویتی و فهرست گروه‌های عملیاتی مستقیماً از Backend فراخوانی شده است. نمونه آزمایشی نقشه با داده‌های شبیه‌سازی‌شده فعال است؛ موقعیت‌یاب زنده و مجوزهای مکانی در فازهای آینده پیاده‌سازی خواهند شد.",
+            message = "اطلاعات هویتی و گروه‌های عملیاتی مستقیماً از Backend فراخوانی شده است. نقشه عملیاتی با لایه‌های معابر، نقاط مشترک و نشانگرهای زنده مکان همنوردان گروه با رضایت صریح فعال است.",
             type = BannerType.INFO
         )
 
@@ -190,7 +269,11 @@ private fun DetailItem(
     label: String,
     value: String
 ) {
-    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+    ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,

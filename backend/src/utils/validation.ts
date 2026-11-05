@@ -16,7 +16,6 @@ export function validateCoordinates(lat: unknown, lon: unknown): ApiFieldError[]
   }
   return errors;
 }
-
 export function validateTelemetryPayload(data: any): ApiFieldError[] {
   const errors: ApiFieldError[] = [];
 
@@ -74,7 +73,6 @@ export function validateTelemetryPayload(data: any): ApiFieldError[] {
 
   return errors;
 }
-
 export function validateIncidentPayload(data: any): ApiFieldError[] {
   const errors: ApiFieldError[] = [];
 
@@ -114,6 +112,60 @@ export function validateIncidentPayload(data: any): ApiFieldError[] {
   }
 
   errors.push(...validateCoordinates(data.latitude, data.longitude));
+
+  return errors;
+}
+export const VALID_POI_CATEGORIES = [
+  'START_POINT',
+  'DESTINATION',
+  'CAMPSITE',
+  'REST_AREA',
+  'WATER_SOURCE',
+  'GENERAL',
+] as const;
+
+export function validatePoiPayload(data: any, isPartialUpdate = false): ApiFieldError[] {
+  const errors: ApiFieldError[] = [];
+
+  if (!data || typeof data !== 'object') {
+    errors.push({ field: 'body', issue: 'بدنه درخواست نامعتبر است' });
+    return errors;
+  }
+
+  // Title validation
+  if (!isPartialUpdate || data.title !== undefined) {
+    if (typeof data.title !== 'string' || data.title.trim().length === 0 || data.title.trim().length > 100) {
+      errors.push({
+        field: 'title',
+        issue: 'عنوان نقطه باید متنی بین ۱ تا ۱۰۰ کاراکتر باشد',
+      });
+    }
+  }
+
+  // Description validation (optional)
+  if (data.description !== undefined && data.description !== null) {
+    if (typeof data.description !== 'string' || data.description.length > 1000) {
+      errors.push({
+        field: 'description',
+        issue: 'توضیحات نقطه نمی‌تواند بیش از ۱۰۰۰ کاراکتر باشد',
+      });
+    }
+  }
+
+  // Category validation
+  if (!isPartialUpdate || data.category !== undefined) {
+    if (typeof data.category !== 'string' || !VALID_POI_CATEGORIES.includes(data.category as any)) {
+      errors.push({
+        field: 'category',
+        issue: `دسته‌بندی نقطه باید یکی از موارد زیر باشد: ${VALID_POI_CATEGORIES.join(', ')}`,
+      });
+    }
+  }
+
+  // Coordinate validation
+  if (!isPartialUpdate || data.latitude !== undefined || data.longitude !== undefined) {
+    errors.push(...validateCoordinates(data.latitude, data.longitude));
+  }
 
   return errors;
 }

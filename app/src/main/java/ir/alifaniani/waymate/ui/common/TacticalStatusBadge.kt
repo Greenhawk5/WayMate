@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -15,7 +16,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import ir.alifaniani.waymate.ui.theme.LocalTacticalStatusColors
 
@@ -29,6 +29,9 @@ enum class BadgeTone {
 /**
  * Accessible status chip that pairs color with text and an indicator dot
  * to ensure state is never communicated through color alone.
+ *
+ * Guarantees horizontal integrity: maxLines = 1 and softWrap = false prevent
+ * vertical character-by-character stacking even when placed in constrained containers.
  */
 @Composable
 fun TacticalStatusBadge(
@@ -63,6 +66,7 @@ fun TacticalStatusBadge(
 
     Row(
         modifier = modifier
+            .wrapContentSize()
             .background(containerColor, RoundedCornerShape(12.dp))
             .border(1.dp, dotColor.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
             .padding(horizontal = 10.dp, vertical = 4.dp),
@@ -77,7 +81,9 @@ fun TacticalStatusBadge(
         Text(
             text = text,
             style = MaterialTheme.typography.labelSmall,
-            color = contentColor
+            color = contentColor,
+            maxLines = 1,
+            softWrap = false
         )
     }
 }

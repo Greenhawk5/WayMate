@@ -1,3 +1,5 @@
+export * from './types/location.js';
+
 /**
  * Environment bindings injected by Cloudflare Workers runtime.
  */
@@ -6,6 +8,7 @@ export interface Bindings {
   ENVIRONMENT: string;
   API_VERSION: string;
   JWT_SECRET?: string;
+  LOCATION_SESSIONS?: DurableObjectNamespace;
 }
 
 /**
@@ -151,3 +154,26 @@ export interface DbAuditLog {
   created_at: number;
 }
 
+export type PointCategory =
+  | 'START_POINT'
+  | 'DESTINATION'
+  | 'CAMPSITE'
+  | 'REST_AREA'
+  | 'WATER_SOURCE'
+  | 'GENERAL';
+
+export interface DbPointOfInterest {
+  id: string;
+  team_id: string;
+  created_by_user_id: string;
+  updated_by_user_id: string;
+  title: string;
+  description: string;
+  category: PointCategory;
+  latitude: number;
+  longitude: number;
+  is_deleted: number;
+  version: number;
+  created_at: number;
+  updated_at: number;
+}

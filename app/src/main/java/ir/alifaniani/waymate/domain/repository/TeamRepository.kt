@@ -48,4 +48,24 @@ interface TeamRepository {
         equipmentSummary: String? = null,
         isActive: Boolean? = null
     ): Result<Team>
+
+    /**
+     * Adds a new personnel member to an existing tactical team roster.
+     * Accessible by OWNER and COMMANDER roles.
+     */
+    suspend fun addMember(
+        teamId: String,
+        fullName: String,
+        callsign: String,
+        roleInTeam: String
+    ): Result<TeamMember>
+
+    /**
+     * Removes a member from an existing tactical team roster.
+     * Accessible by OWNER and COMMANDER roles.
+     */
+    suspend fun removeMember(
+        teamId: String,
+        memberId: String
+    ): Result<Unit>
 }

@@ -72,6 +72,11 @@ class NetworkClient(
         return retrofit.create(AdminApiService::class.java)
     }
 
+    fun createPointApiService(): PointOfInterestApiService {
+        return retrofit.create(PointOfInterestApiService::class.java)
+    }
+
+
     companion object {
         fun createCustomClient(
             baseUrl: String,

@@ -10,8 +10,11 @@ import ir.alifaniani.waymate.core.network.ApiException
 import ir.alifaniani.waymate.core.network.SafePoller
 import ir.alifaniani.waymate.data.sync.OfflineSyncManager
 import ir.alifaniani.waymate.domain.model.ConnectionStatus
+import ir.alifaniani.waymate.domain.model.GroupMemberLocation
 import ir.alifaniani.waymate.domain.model.ManagedUser
 import ir.alifaniani.waymate.domain.model.OperationalStatus
+import ir.alifaniani.waymate.domain.model.PointCategory
+import ir.alifaniani.waymate.domain.model.PointOfInterest
 import ir.alifaniani.waymate.domain.model.TacticalMessage
 import ir.alifaniani.waymate.domain.model.Team
 import ir.alifaniani.waymate.domain.model.TeamMember
@@ -19,8 +22,11 @@ import ir.alifaniani.waymate.domain.model.UserRole
 import ir.alifaniani.waymate.domain.repository.AdminRepository
 import ir.alifaniani.waymate.domain.repository.AuthRepository
 import ir.alifaniani.waymate.domain.repository.MessageRepository
+import ir.alifaniani.waymate.domain.repository.PointOfInterestRepository
 import ir.alifaniani.waymate.domain.repository.StatusRepository
 import ir.alifaniani.waymate.domain.repository.TeamRepository
+import ir.alifaniani.waymate.domain.usecase.ObserveLocationSharingStateUseCase
+import ir.alifaniani.waymate.domain.usecase.StopLocationSharingUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,7 +37,9 @@ import kotlinx.coroutines.launch
  * ViewModel responsible for managing tactical team roster, live link health,
  * operational status selection, real-time tactical messaging with safe polling,
  * Phase 9 roles and management operations,
- * and Phase 10 local offline storage and synchronization.
+ * Phase 10 local offline storage and synchronization,
+ * Phase 11 shared points of interest,
+ * and real-time consent-based location sharing.
  */
 class HomeViewModel(
     private val teamRepository: TeamRepository,
@@ -40,6 +48,9 @@ class HomeViewModel(
     private val authRepository: AuthRepository? = null,
     private val adminRepository: AdminRepository? = null,
     private val offlineSyncManager: OfflineSyncManager? = null,
+    private val pointRepository: PointOfInterestRepository? = null,
+    private val observeLocationSharingStateUseCase: ObserveLocationSharingStateUseCase? = null,
+    private val stopLocationSharingUseCase: StopLocationSharingUseCase? = null,
     private val dispatcherProvider: DispatcherProvider = DefaultDispatcherProvider(),
     private val poller: SafePoller = SafePoller()
 ) : ViewModel() {
@@ -51,8 +62,30 @@ class HomeViewModel(
         loadTeams()
         loadMessages()
         loadLiveStatuses()
+        loadMyOperationalStatus()
+        loadPoints()
         refreshOfflineQueueCount()
         startPolling()
+        observeLocationSharingState()
+    }
+
+    private fun loadMyOperationalStatus() {
+        val repo = statusRepository ?: return
+        viewModelScope.launch(dispatcherProvider.main) {
+            repo.getMyOperationalStatus()?.let { savedStatus ->
+                _uiState.update { it.copy(myOperationalStatus = savedStatus) }
+            }
+        }
+    }
+
+    private fun observeLocationSharingState() {
+        observeLocationSharingStateUseCase?.let { useCase ->
+            viewModelScope.launch(dispatcherProvider.main) {
+                useCase().collect { sharingState ->
+                    _uiState.update { it.copy(locationSharingState = sharingState) }
+                }
+            }
+        }
     }
 
     fun loadTeams() {
@@ -118,7 +151,6 @@ class HomeViewModel(
                     _uiState.update {
                         it.copy(
                             liveStatuses = result.data,
-                            connectionStatus = ConnectionStatus.ONLINE,
                             lastSyncTimestamp = System.currentTimeMillis()
                         )
                     }
@@ -182,19 +214,31 @@ class HomeViewModel(
 
     fun sendTacticalMessage(body: String, isUrgent: Boolean, targetTeamId: String?) {
         val repo = messageRepository ?: return
+        if (_uiState.value.isSendingMessage) return
+        _uiState.update { it.copy(isSendingMessage = true) }
         viewModelScope.launch(dispatcherProvider.main) {
-            when (val result = repo.sendMessage(body, isUrgent, targetTeamId)) {
-                is Result.Success -> {
-                    _uiState.update { state ->
-                        state.copy(messages = listOf(result.data) + state.messages)
+            try {
+                when (val result = repo.sendMessage(body, isUrgent, targetTeamId)) {
+                    is Result.Success -> {
+                        _uiState.update { state ->
+                            state.copy(
+                                isSendingMessage = false,
+                                messages = listOf(result.data) + state.messages
+                            )
+                        }
+                        refreshOfflineQueueCount()
                     }
-                    refreshOfflineQueueCount()
+                    is Result.Error -> {
+                        _uiState.update { it.copy(isSendingMessage = false) }
+                        handleError(result)
+                        refreshOfflineQueueCount()
+                    }
+                    else -> {
+                        _uiState.update { it.copy(isSendingMessage = false) }
+                    }
                 }
-                is Result.Error -> {
-                    handleError(result)
-                    refreshOfflineQueueCount()
-                }
-                else -> {}
+            } catch (_: Exception) {
+                _uiState.update { it.copy(isSendingMessage = false) }
             }
         }
     }
@@ -417,6 +461,62 @@ class HomeViewModel(
         }
     }
 
+    fun addTeamMember(teamId: String, fullName: String, callsign: String, roleInTeam: String) {
+        _uiState.update { it.copy(isManagementLoading = true) }
+        viewModelScope.launch(dispatcherProvider.main) {
+            when (val result = teamRepository.addMember(teamId, fullName, callsign, roleInTeam)) {
+                is Result.Success -> {
+                    _uiState.update {
+                        it.copy(
+                            isManagementLoading = false,
+                            managementFeedbackMessage = "عضو '${result.data.callsign}' با موفقیت به گروه اضافه شد",
+                            isManagementFeedbackError = false
+                        )
+                    }
+                    loadTeams()
+                }
+                is Result.Error -> {
+                    _uiState.update {
+                        it.copy(
+                            isManagementLoading = false,
+                            managementFeedbackMessage = result.message ?: "خطا در افزودن عضو به گروه",
+                            isManagementFeedbackError = true
+                        )
+                    }
+                }
+                else -> {}
+            }
+        }
+    }
+
+    fun removeTeamMember(teamId: String, memberId: String) {
+        _uiState.update { it.copy(isManagementLoading = true) }
+        viewModelScope.launch(dispatcherProvider.main) {
+            when (val result = teamRepository.removeMember(teamId, memberId)) {
+                is Result.Success -> {
+                    _uiState.update {
+                        it.copy(
+                            isManagementLoading = false,
+                            managementFeedbackMessage = "عضو با موفقیت از گروه حذف شد",
+                            isManagementFeedbackError = false
+                        )
+                    }
+                    loadTeams()
+                }
+                is Result.Error -> {
+                    _uiState.update {
+                        it.copy(
+                            isManagementLoading = false,
+                            managementFeedbackMessage = result.message ?: "خطا در حذف عضو از گروه",
+                            isManagementFeedbackError = true
+                        )
+                    }
+                }
+                else -> {}
+            }
+        }
+    }
+
     fun dismissManagementFeedback() {
         _uiState.update { it.copy(managementFeedbackMessage = null) }
     }
@@ -500,12 +600,174 @@ class HomeViewModel(
         }
     }
 
+    fun loadPoints(forceRefresh: Boolean = false) {
+        val repo = pointRepository ?: return
+        viewModelScope.launch(dispatcherProvider.main) {
+            when (val result = repo.getPoints(forceRefresh = forceRefresh)) {
+                is Result.Success -> {
+                    _uiState.update {
+                        it.copy(
+                            points = result.data,
+                            lastSyncTimestamp = System.currentTimeMillis()
+                        )
+                    }
+                }
+                is Result.Error -> {
+                    // Fail silently for points on background load without disrupting primary status
+                }
+                else -> {}
+            }
+        }
+    }
+
+    fun selectPoint(point: PointOfInterest?) {
+        _uiState.update { it.copy(selectedPoint = point) }
+    }
+
+    fun openCreatePointDialog() {
+        _uiState.update { it.copy(isPointDialogVisible = true, editingPoint = null) }
+    }
+
+    fun openEditPointDialog(point: PointOfInterest) {
+        _uiState.update { it.copy(isPointDialogVisible = true, editingPoint = point) }
+    }
+
+    fun dismissPointDialog() {
+        _uiState.update { it.copy(isPointDialogVisible = false, editingPoint = null) }
+    }
+
+    fun createPoint(
+        title: String,
+        description: String,
+        category: PointCategory,
+        latitude: Double,
+        longitude: Double,
+        teamId: String? = null
+    ) {
+        val repo = pointRepository ?: return
+        viewModelScope.launch(dispatcherProvider.main) {
+            when (val result = repo.createPoint(title, description, category, latitude, longitude, teamId)) {
+                is Result.Success -> {
+                    loadPoints()
+                    refreshOfflineQueueCount()
+                    _uiState.update {
+                        it.copy(
+                            selectedPoint = result.data,
+                            pointFeedbackMessage = "نقطه «$title» با موفقیت ثبت شد."
+                        )
+                    }
+                }
+                is Result.Error -> {
+                    _uiState.update {
+                        it.copy(pointFeedbackMessage = "خطا در ثبت نقطه: ${result.message}")
+                    }
+                }
+                else -> {}
+            }
+        }
+    }
+
+    fun updatePoint(
+        id: String,
+        title: String,
+        description: String,
+        category: PointCategory,
+        latitude: Double,
+        longitude: Double,
+        version: Int
+    ) {
+        val repo = pointRepository ?: return
+        viewModelScope.launch(dispatcherProvider.main) {
+            when (val result = repo.updatePoint(id, title, description, category, latitude, longitude, version)) {
+                is Result.Success -> {
+                    loadPoints()
+                    refreshOfflineQueueCount()
+                    _uiState.update {
+                        it.copy(
+                            selectedPoint = result.data,
+                            pointFeedbackMessage = "نقطه «$title» با موفقیت به‌روزرسانی شد."
+                        )
+                    }
+                }
+                is Result.Error -> {
+                    _uiState.update {
+                        it.copy(pointFeedbackMessage = "خطا در ویرایش نقطه: ${result.message}")
+                    }
+                }
+                else -> {}
+            }
+        }
+    }
+
+    fun deletePoint(id: String) {
+        val repo = pointRepository ?: return
+        viewModelScope.launch(dispatcherProvider.main) {
+            when (val result = repo.deletePoint(id)) {
+                is Result.Success -> {
+                    loadPoints()
+                    refreshOfflineQueueCount()
+                    _uiState.update {
+                        it.copy(
+                            selectedPoint = null,
+                            pointFeedbackMessage = "نقطه با موفقیت حذف شد."
+                        )
+                    }
+                }
+                is Result.Error -> {
+                    _uiState.update {
+                        it.copy(pointFeedbackMessage = "خطا در حذف نقطه: ${result.message}")
+                    }
+                }
+                else -> {}
+            }
+        }
+    }
+
+    fun dismissPointFeedback() {
+        _uiState.update { it.copy(pointFeedbackMessage = null) }
+    }
+
     fun retry() {
         syncOfflineQueue()
         loadTeams()
         loadMessages()
         loadLiveStatuses()
+        loadPoints()
         resumePolling()
+    }
+
+    fun showLocationRationale() {
+        _uiState.update { it.copy(isLocationPermissionRationaleVisible = true) }
+    }
+
+    fun dismissLocationRationale() {
+        _uiState.update { it.copy(isLocationPermissionRationaleVisible = false) }
+    }
+
+    fun onLocationPermissionDenied(isPermanentlyDenied: Boolean = false) {
+        _uiState.update {
+            it.copy(
+                isLocationPermissionDenied = true,
+                isLocationPermissionPermanentlyDenied = isPermanentlyDenied
+            )
+        }
+    }
+
+    fun dismissLocationPermissionDenied() {
+        _uiState.update {
+            it.copy(
+                isLocationPermissionDenied = false,
+                isLocationPermissionPermanentlyDenied = false
+            )
+        }
+    }
+
+    fun stopLocationSharing() {
+        stopLocationSharingUseCase?.invoke()
+    }
+
+    fun selectGroupMember(member: GroupMemberLocation?) {
+        _uiState.update { it.copy(selectedGroupMember = member) }
     }
 
     override fun onCleared() {
@@ -521,6 +783,9 @@ class HomeViewModel(
             authRepository: AuthRepository? = null,
             adminRepository: AdminRepository? = null,
             offlineSyncManager: OfflineSyncManager? = null,
+            pointRepository: PointOfInterestRepository? = null,
+            observeLocationSharingStateUseCase: ObserveLocationSharingStateUseCase? = null,
+            stopLocationSharingUseCase: StopLocationSharingUseCase? = null,
             dispatcherProvider: DispatcherProvider = DefaultDispatcherProvider()
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -533,6 +798,9 @@ class HomeViewModel(
                         authRepository = authRepository,
                         adminRepository = adminRepository,
                         offlineSyncManager = offlineSyncManager,
+                        pointRepository = pointRepository,
+                        observeLocationSharingStateUseCase = observeLocationSharingStateUseCase,
+                        stopLocationSharingUseCase = stopLocationSharingUseCase,
                         dispatcherProvider = dispatcherProvider
                     ) as T
                 }

@@ -15,6 +15,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -27,6 +28,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import ir.alifaniani.waymate.domain.model.GroupMemberLocation
+import ir.alifaniani.waymate.domain.model.PointOfInterest
 import ir.alifaniani.waymate.ui.common.BadgeTone
 import ir.alifaniani.waymate.ui.common.BannerType
 import ir.alifaniani.waymate.ui.common.TacticalFeedbackBanner
@@ -34,12 +37,18 @@ import ir.alifaniani.waymate.ui.common.TacticalOutlinedButton
 import ir.alifaniani.waymate.ui.common.TacticalStatusBadge
 import ir.alifaniani.waymate.ui.home.map.AssetGisLayerRepository
 import ir.alifaniani.waymate.ui.home.map.BaseMapPresentation
+import ir.alifaniani.waymate.ui.home.map.HikingSimulationBar
+import ir.alifaniani.waymate.ui.home.map.HikingSimulationEngine
+import ir.alifaniani.waymate.ui.home.map.PointOfInterestDetailCard
 import ir.alifaniani.waymate.ui.home.map.SyntheticMarker
 import ir.alifaniani.waymate.ui.home.map.TacticalLayerControlSheet
 import ir.alifaniani.waymate.ui.home.map.TacticalMapCanvas
 import ir.alifaniani.waymate.ui.home.map.TacticalMapUiState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Tactical map preview and connection health presentation component.
@@ -47,6 +56,10 @@ import kotlinx.coroutines.launch
  * Implements a safe, decoupled educational map experience:
  * - Decoupled base map presentations (Offline Tactical, Standard Street, and unconfigured Satellite)
  * - Independent vector overlays (Jahrom road network, Waterways, Tactical Grid, Synthetic Units)
+ * - Shared group Points of Interest (POI) with offline synchronization and category markers
+ * - Hiking routes and waypoints visualization
+ * - Synthetic deterministic hiking simulation with play/pause/reset controls
+ * - Real-time consenting group members live location display
  * - Non-blocking background loading of audited GIS vector assets
  * - Transparent status for unconfigured services (Satellite)
  * - Explicitly labeled synthetic demonstration markers (no real-world GPS tracking)
@@ -54,12 +67,55 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun TacticalMapAndLinkSection(
+    points: List<PointOfInterest> = emptyList(),
+    selectedPoint: PointOfInterest? = null,
+    onSelectPoint: (PointOfInterest?) -> Unit = {},
+    groupMembers: List<GroupMemberLocation> = emptyList(),
+    selectedGroupMember: GroupMemberLocation? = null,
+    onSelectGroupMember: (GroupMemberLocation?) -> Unit = {},
+    onOpenCreatePointDialog: () -> Unit = {},
+    onOpenEditPointDialog: (PointOfInterest) -> Unit = {},
+    onDeletePoint: (String) -> Unit = {},
+    offlineQueueCount: Int = 0,
+    lastSyncTimestamp: Long = 0L,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val gisRepository = remember { AssetGisLayerRepository(context) }
-    var mapState by remember { mutableStateOf(TacticalMapUiState()) }
+    val simulationEngine = remember { HikingSimulationEngine() }
+    val simulationState by simulationEngine.state.collectAsState()
+    var isSimulationBarVisible by remember { mutableStateOf(false) }
+
+    var mapState by remember {
+        mutableStateOf(
+            TacticalMapUiState(
+                pointsOfInterest = points,
+                selectedPointOfInterest = selectedPoint,
+                groupMemberLocations = groupMembers,
+                selectedGroupMember = selectedGroupMember
+            )
+        )
+    }
+
+    // Keep map state synchronized with incoming POI and group member properties
+    LaunchedEffect(points, selectedPoint, groupMembers, selectedGroupMember) {
+        mapState = mapState.copy(
+            pointsOfInterest = points,
+            selectedPointOfInterest = selectedPoint,
+            groupMemberLocations = groupMembers,
+            selectedGroupMember = selectedGroupMember
+        )
+    }
+
+    // Keep map state synchronized with simulation progress
+    LaunchedEffect(simulationState, isSimulationBarVisible) {
+        mapState = mapState.copy(
+            simulatedHikerPosition = if (isSimulationBarVisible) simulationState.currentPosition else null,
+            simulatedHikerBearing = simulationState.currentBearing,
+            selectedRoute = if (isSimulationBarVisible) simulationState.route else null
+        )
+    }
 
     // Asynchronously load real GIS vector features from assets without blocking UI
     LaunchedEffect(Unit) {
@@ -98,7 +154,11 @@ fun TacticalMapAndLinkSection(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp)
+                ) {
                     Text(
                         text = "نقشه عملیاتی و لایه‌های اطلاعاتی",
                         style = MaterialTheme.typography.titleMedium,
@@ -106,7 +166,7 @@ fun TacticalMapAndLinkSection(
                         color = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        text = "نمایش چندلایه‌ای داده‌های مکانی جهرم و وضعیت ارتباطی",
+                        text = "نمایش چندلایه‌ای داده‌های مکانی جهرم، مسیرهای کوهنوردی و نقاط گروه",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -120,12 +180,50 @@ fun TacticalMapAndLinkSection(
 
             Spacer(modifier = Modifier.height(10.dp))
 
+            // Action Controls Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                TacticalOutlinedButton(
+                    text = if (isSimulationBarVisible) "بستن شبیه‌ساز" else "شبیه‌ساز پیمایش ⛰",
+                    onClick = { isSimulationBarVisible = !isSimulationBarVisible },
+                    modifier = Modifier.weight(1f)
+                )
+                TacticalOutlinedButton(
+                    text = "نقطه جدید (+)",
+                    onClick = onOpenCreatePointDialog,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
             // Educational & Synthetic Boundary Banner
             TacticalFeedbackBanner(
                 title = "محیط آزمایشی نقشه (Educational Prototype)",
                 message = "کلیه نشانگرها داده‌های شبیه‌سازی‌شده هستند. داده‌های خطی معابر و مسیل‌ها از فایل‌های وکتور جهرم (EPSG:4326) استخراج و ممیزی شده‌اند.",
                 type = BannerType.INFO
             )
+
+            // Hiking Simulation Bar (when expanded)
+            if (isSimulationBarVisible) {
+                Spacer(modifier = Modifier.height(10.dp))
+                HikingSimulationBar(
+                    simulationState = simulationState,
+                    onTogglePlayPause = {
+                        if (simulationState.isPlaying) {
+                            simulationEngine.pause()
+                        } else {
+                            simulationEngine.start(coroutineScope)
+                        }
+                    },
+                    onReset = { simulationEngine.reset() },
+                    onSelectRoute = { route -> simulationEngine.selectRoute(route) },
+                    onSetSpeedMultiplier = { speed -> simulationEngine.setSpeedMultiplier(speed) },
+                    onDismiss = { isSimulationBarVisible = false }
+                )
+            }
 
             Spacer(modifier = Modifier.height(14.dp))
 
@@ -134,7 +232,13 @@ fun TacticalMapAndLinkSection(
                 uiState = mapState,
                 onMarkerSelected = { marker ->
                     mapState = mapState.copy(selectedMarker = marker)
+                    if (marker != null) onSelectPoint(null)
                 },
+                onPointOfInterestSelected = { poi ->
+                    if (poi != null) mapState = mapState.copy(selectedMarker = null)
+                    onSelectPoint(poi)
+                },
+                onGroupMemberSelected = onSelectGroupMember,
                 onZoomIn = {
                     if (mapState.zoomLevel < 18) {
                         mapState = mapState.copy(zoomLevel = mapState.zoomLevel + 1)
@@ -166,7 +270,18 @@ fun TacticalMapAndLinkSection(
                 }
             )
 
-            // Selected Marker Tactical Inspection Card
+            // Selected POI Inspection & Action Card
+            if (selectedPoint != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                PointOfInterestDetailCard(
+                    point = selectedPoint,
+                    onEdit = onOpenEditPointDialog,
+                    onDelete = onDeletePoint,
+                    onDismiss = { onSelectPoint(null) }
+                )
+            }
+
+            // Selected Synthetic Marker Tactical Inspection Card
             if (mapState.selectedMarker != null) {
                 Spacer(modifier = Modifier.height(12.dp))
                 SelectedMarkerCard(
@@ -220,12 +335,16 @@ fun TacticalMapAndLinkSection(
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Connection Link Metrics
+            // Connection Link & POI Diagnostics Metrics (Stage 11.6)
+            val timeFormatter = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                MetricItem(label = "نوع شبکه ارتباطی", value = "اینترانت امن تاکتیکی")
+                MetricItem(
+                    label = "همگام‌سازی ابری D1",
+                    value = if (lastSyncTimestamp > 0) "برخط (${timeFormatter.format(Date(lastSyncTimestamp))})" else "پایگاه محلی SQLite"
+                )
                 MetricItem(label = "پوشش جغرافیایی", value = "جهرم (Fars, IRN)")
             }
 
@@ -235,8 +354,14 @@ fun TacticalMapAndLinkSection(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                MetricItem(label = "صف ذخیره و ارسال", value = "۰ پیام معوق (برخط)")
-                MetricItem(label = "عوارض وکتور بارگذاری‌شده", value = "${mapState.vectorSegments.size} قطعه‌خط")
+                MetricItem(
+                    label = "صف ذخیره و ارسال",
+                    value = if (offlineQueueCount > 0) "$offlineQueueCount عملیات معوق" else "۰ معوق (پایدار)"
+                )
+                MetricItem(
+                    label = "نقاط نشانه مشترک",
+                    value = "${points.size} نقطه فعال (${points.count { it.isPendingSync }} در صف)"
+                )
             }
         }
     }

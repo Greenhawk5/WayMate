@@ -5,7 +5,7 @@
   "compatibility_date": "2026-10-28",
   "compatibility_flags": ["nodejs_compat"],
   "vars": {
-    "ENVIRONMENT": "development",
+    "ENVIRONMENT": "production",
     "API_VERSION": "v1"
   },
   "d1_databases": [
@@ -14,6 +14,20 @@
       "database_name": "waymate-d1",
       "database_id": "058dd425-7611-4987-a379-7a40a8ab97d2",
       "migrations_dir": "migrations"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "LOCATION_SESSIONS",
+        "class_name": "LocationSessionDO"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["LocationSessionDO"]
     }
   ],
   "observability": {

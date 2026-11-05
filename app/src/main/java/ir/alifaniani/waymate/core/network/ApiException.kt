@@ -12,6 +12,7 @@ sealed class ApiException(
     class Forbidden(message: String = "دسترسی به این منبع برای نقش شما مجاز نیست") : ApiException(message)
     class NotFound(message: String = "منبع درخواستی یافت نشد") : ApiException(message)
     class RateLimited(message: String = "تعداد درخواست‌ها بیش از حد مجاز است") : ApiException(message)
+    class Conflict(message: String = "تعارض در داده‌های ارسالی با وضعیت فعلی سرور") : ApiException(message)
     class Validation(val errors: List<String>, message: String = "خطای اعتبارسنجی مقادیر ورودی") : ApiException(message)
     class NetworkUnavailable(message: String = "ارتباط با شبکه تاکتیکی برقرار نیست") : ApiException(message)
     class ServerError(val statusCode: Int, message: String = "خطای غیرمنتظره در سرور رخ داد") : ApiException(message)

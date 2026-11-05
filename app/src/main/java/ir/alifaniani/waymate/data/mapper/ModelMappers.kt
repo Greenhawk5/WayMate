@@ -129,3 +129,29 @@ fun LiveUnitDto.toDomain(): TeamLiveStatus = TeamLiveStatus(
     lastSeenAt = lastSeenAt,
     isStale = isStale
 )
+
+fun ir.alifaniani.waymate.data.dto.PointOfInterestDto.toDomain(): ir.alifaniani.waymate.domain.model.PointOfInterest =
+    ir.alifaniani.waymate.domain.model.PointOfInterest(
+        id = id,
+        teamId = teamId,
+        title = title,
+        description = description,
+        category = when (category.uppercase()) {
+            "START_POINT" -> ir.alifaniani.waymate.domain.model.PointCategory.START_POINT
+            "DESTINATION" -> ir.alifaniani.waymate.domain.model.PointCategory.DESTINATION
+            "CAMPSITE" -> ir.alifaniani.waymate.domain.model.PointCategory.CAMPSITE
+            "REST_AREA" -> ir.alifaniani.waymate.domain.model.PointCategory.REST_AREA
+            "WATER_SOURCE" -> ir.alifaniani.waymate.domain.model.PointCategory.WATER_SOURCE
+            else -> ir.alifaniani.waymate.domain.model.PointCategory.GENERAL
+        },
+        latitude = latitude,
+        longitude = longitude,
+        createdByUserId = createdByUserId,
+        createdByCallsign = createdByCallsign,
+        updatedByUserId = updatedByUserId,
+        updatedByCallsign = updatedByCallsign,
+        isDeleted = isDeleted,
+        version = version,
+        createdAt = createdAt,
+        updatedAt = updatedAt
+    )

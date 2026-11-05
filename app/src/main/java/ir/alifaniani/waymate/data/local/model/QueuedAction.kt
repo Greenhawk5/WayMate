@@ -9,8 +9,12 @@ enum class ActionType {
     SEND_MESSAGE,
     UPDATE_STATUS,
     ACK_MESSAGE,
-    CREATE_TEAM
+    CREATE_TEAM,
+    CREATE_POINT,
+    UPDATE_POINT,
+    DELETE_POINT
 }
+
 
 /**
  * Execution state of an item in the offline queue.
