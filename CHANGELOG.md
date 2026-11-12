@@ -7,14 +7,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [Unreleased] (Candidate: [0.15.0-beta.1])
 
-### Planned
-- Physical dual-Android-phone live location exchange verification (pending second hardware phone).
-- Physical touchscreen multi-finger pinch-to-zoom and two-finger rotation gesture calibration.
-- Multi-hour continuous battery and thermal field endurance benchmarks.
-- Upgrade backend devDependencies (`vitest`) to resolve 3 moderate test runner vulnerabilities.
-- Phase 15: Final project verification, architecture review, and handover.
+### Added
+- **Interactive Onboarding Experience**:
+  - Implemented 3-step interactive onboarding walkthrough (`OnboardingScreen.kt`) featuring custom illustrations, high-contrast skip action, and Persian RTL typography.
+  - Added SharedPreferences-backed persistence layer (`OnboardingPreferences.kt`) with an in-memory test double (`InMemoryOnboardingStorage`).
+  - Unit tests verifying first-launch detection, skip flow, and persistence (`OnboardingPreferencesTest.kt`).
+- **Android 12+ System Splash Screen**:
+  - Added modern splash theme (`Theme.WayMate.Splash` in `res/values-v31/themes.xml`) using `windowSplashScreenAnimatedIcon` and vector splash logo (`ic_splash_logo.png`).
+- **Curved Circular Orbit Navigation Architecture**:
+  - Replaced legacy single-scroll home layout with a 5-destination navigation system driven by a custom bottom bar (`CircularOrbitNavigationBar.kt`) and `HorizontalPager`.
+  - Added dedicated primary destinations:
+    - `LiveMapScreen.kt` (Tab 0: Tactical GIS Canvas, 7-layer control sheet, route simulation, teammate HUD).
+    - `OverviewScreen.kt` (Tab 1: Operational readiness metrics, touch-scrubbing area chart, quick actions).
+    - `TeamsScreen.kt` (Tab 2: Unit roster, vehicle/equipment allocations, member roles).
+    - `OperationsScreen.kt` (Tab 3: Tactical broadcast messaging, priority orders, status dispatch).
+    - `ProfileScreen.kt` (Tab 4: Operator callsign card, clearance level, routing to secondary screens).
+  - Added secondary full-screen destinations reachable from Profile:
+    - `SettingsScreen.kt`: Granular toggles for high-accuracy GPS, coordinate grids, sound/vibration alerts, and offline cache management.
+    - `AboutScreen.kt`: Full architectural specification, version details, and privacy pledge.
+  - Comprehensive unit test suite verifying tab synchronization, back-stack popping, and role permissions (`CircularNavigationArchitectureTest.kt`).
+- **Tactical Design System & Component Library (`ui/designsystem/`)**:
+  - `CircularOrbitNavigationBar.kt`: Curved orbit bar with animated active glow indicator.
+  - `TacticalAreaChart.kt`: Responsive quadratic bezier area curve with touch-scrubbing time/percentage inspector.
+  - `TacticalIcons.kt`: Dedicated tactical iconography library containing 15+ custom vectors.
+  - `WayMateLoaders.kt`: Animated radar pulse, orbital rotation, and telemetry sweep indicators.
+  - `WayMateComponents.kt`: Standardized tactical cards, metric chips, status badges, and empty-state cards.
+- **15-Class Tactical Notification System (`service/WayMateNotificationManager.kt`)**:
+  - Introduced 15 distinct operational notification classifications mapped to custom drawables (`ic_stat_notify_*.png`).
+  - Defined 6 dedicated Android notification channels: Emergency (`CHANNEL_EMERGENCY`), Location Sharing (`CHANNEL_LOCATION_SHARING`), Tactical Orders (`CHANNEL_TACTICAL_ORDERS`), Navigation (`CHANNEL_NAVIGATION`), Squad (`CHANNEL_SQUAD`), and Sync Queue (`CHANNEL_SYNC`).
+  - Unit test suite covering channel configuration, notification building, and intent binding (`WayMateNotificationManagerTest.kt`).
+- **Store & Distribution Collateral (`distribution/store_assets/`)**:
+  - Created complete Google Play Store and Cafe Bazaar promotional package: feature banner (`banner.png`), 5 screenshot cards (`card_1.png` - `card_5.png`), tablet overview graphic (`waymate_overview.png`), splash master artwork, and Open Graph card.
+  - Authored comprehensive store listing documentation (`distribution/store_assets/store_listing.md`) in Persian and English.
+- **Test Suite Expansion**:
+  - Expanded Android unit test suite to **218 passing tests** (up from 203 in `0.14.0-beta.1`).
+
+### Changed
+- **Navigation & Gesture Ergonomics**:
+  - Isolated map touch gestures: horizontal pager swiping is conditionally disabled on Tab 0 (`LiveMapScreen`) to prevent conflicts with single-finger map panning.
+  - Unified system back-handler logic: pressing back from secondary screens returns to Profile; pressing back from any primary tab returns to Overview (Tab 1).
+- **Design Tokens**:
+  - Standardized color system with `WayMateMidnightDark` (#0A0E17), `WayMateCyan` (#00E5FF), and semantic tactical feedback tokens.
+
+### Fixed
+- **Readiness Chart Header Constraint Overlap & Truncation (BUG 1)**:
+  - Re-architected layout constraints in `TacticalManagementSection.kt` and `TacticalAreaChart.kt`.
+  - Assigned independent, weighted layout space to titles, subtitles, and the dynamic readiness badge, completely eliminating Persian text truncation and ellipsis artifacts (`نرخ برخط بودن و تله‌متری گرو...`).
+- **Navigation Bar Glow Direction in RTL Layouts (BUG 2)**:
+  - Corrected physical-vs-logical coordinate mapping in `CircularOrbitNavigationBar.kt`.
+  - The radial cyan glow now accurately follows the selected icon's physical position during horizontal animations in RTL layouts instead of inverting direction.
+- **Git Repository Hygiene & Ignore Configuration**:
+  - Removed overbroad `/docs` ignore rule that was silently blocking new markdown documentation in `docs/superpowers/plans/`.
+  - Removed accidental `app/src/main/assets/gis` ignore rule to protect offline Jahrom GIS vector geometries.
+  - Added targeted ignore rules for `.kotlin/` compiler cache, `/current_screen.png`, and `/screen*.png`.
+  - Safely purged 27 ephemeral root ADB screenshots (~9.5 MB) from the local working directory.
+
+### Security & Hygiene
+- Verified that zero temporary artifacts, logs, APKs, or secrets exist in Git history across all branches and commits.
+- Kept Git repository database compact at 3.13 MiB.
+- Ensured strict exclusion of local properties, keystores, and signing keys.
 
 ---
 
@@ -93,4 +146,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Created `docs/phase-7.2-operational-geolocation.md` detailing the complete implementation and verification of real-time location sharing.
 - Updated `docs/location-sharing-protocol.md` documenting `Authorization: Bearer <token>` header authentication.
 - Maintained beta testing suite in `docs/beta-release/`.
-

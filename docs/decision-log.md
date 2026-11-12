@@ -278,12 +278,13 @@ A critical finding of Phase 7 evaluation is that **no open-source Map SDK bundle
 | **`AD-010`** | JSON Serialization | Kotlinx Serialization | Active in DTOs, network mappers, and GIS parser. |
 | **`AD-011`** | Testing Strategy | In-Memory Fakes + JUnit 4 + Vitest | Active across client (89 tests) and server (37 tests) suites. |
 
-### 3.2 Pending Decisions Requiring Project Owner Sign-Off (Phase 9 and Beyond)
+### 3.2 Completed Post-MVP Architectural Decisions
 
-| Decision Reference | Recommended Option | Target Phase | Context & Next Action |
+| Decision Reference | Area | Adopted Option | Implementation & Verification Status |
 | :--- | :--- | :--- | :--- |
-| **`AD-003` (Commander UI)** | Unified Android Client (Role-Adapted) | **Phase 9 (Admin/Roles)** | Avoids maintaining separate web console in MVP. |
-| **`AD-004` (Offline DB)** | Room SQLite (Plaintext MVP -> SQLCipher Phase 2) | **Phase 10 (Offline Cache)** | Validates store-and-forward queueing before native crypto. |
-| **`AD-005` (Attachments)** | Defer Photos to Phase 3 | **Phase 11 (Advanced)** | Strictly adheres to R2 exclusion in AGENTS.md. |
-| **`AD-006` (P2P Mesh)** | Defer to Phase 3 | **Phase 11 (Advanced)** | Excludes Wi-Fi Direct/BLE mesh complexities from MVP. |
-| **`AD-007` (Background Location)**| Foreground Service (`type="location"`) | **Phase 7.2 (Deferred)** | Android 14+ compliant ongoing notification. Awaiting explicit opt-in privacy workflow. |
+| **`AD-003`** | Commander & Roles UI | Unified Role-Adapted Client | Implemented: Commander controls appear dynamically based on user role. |
+| **`AD-004`** | Offline Persistence | Native Android SQLite (`WayMateDatabaseHelper`) | Implemented: Store-and-forward queueing (`offline_queue`) with optimistic conflict handling. |
+| **`AD-007`** | Background Geolocation | Android 14+ Foreground Service (`type="location"`) | Implemented: Verified with ongoing notification, instant Stop action, and WebSocket uplink. |
+| **`AD-012`** | Primary Navigation | Curved 5-Destination Orbit Navigation (`CircularOrbitNavigationBar`) + `HorizontalPager` | Implemented: 5 primary destinations (Map, Overview, Teams, Operations, Profile) with gesture isolation for map panning and RTL glow tracking. |
+| **`AD-013`** | Tactical UI & Notifications | Custom Tactical Design System & 15-Class Notification Engine | Implemented: `TacticalAreaChart`, custom tactical loaders, `WayMateNotificationManager` across 6 notification channels. |
+

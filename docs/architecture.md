@@ -88,148 +88,141 @@ graph TD
 
 ---
 
-## 4. Proposed Package Structure
+## 4. Current Verified Package Structure
 
 The package tree is rooted at the project's established package identifier: `ir.alifaniani.waymate`.
 
 ```text
 ir.alifaniani.waymate/
-├── WayMateApp.kt                       // Application class, initializes DI container & logging
-├── MainActivity.kt                     // Single Activity entrypoint hosting Compose navigation
+├── WayMateApp.kt                       // Application class, manual DI container (AppContainer)
+├── MainActivity.kt                     // Single Activity host with System Splash & Navigation gate
 │
 ├── core/                               // Cross-cutting foundation components
-│   ├── common/                         // Result wrapper, dispatchers, extension functions
-│   │   ├── Result.kt                   // Sealed class Result<out T> (Success, Error, Loading)
-│   │   ├── DispatcherProvider.kt       // Coroutine dispatcher abstraction for testability
-│   │   └── AppExceptions.kt            // Domain-level exception definitions
-│   ├── network/                        // Network utilities and configuration
-│   │   ├── NetworkMonitor.kt           // Interface and Android ConnectivityManager observer
-│   │   ├── AuthInterceptor.kt          // Injects Authorization: Bearer <token>
-│   │   └── ApiConstants.kt             // Endpoint paths and network timeout defaults
-│   ├── database/                       // Local database infrastructure
-│   │   └── AppDatabase.kt              // RoomDatabase definition and migration hooks
-│   └── security/                       // Secure credential storage
-│       └── TokenManager.kt             // Interface & implementation using EncryptedSharedPreferences
+│   ├── common/                         // DispatcherProvider, Result<T>, extensions
+│   └── network/                        // SafePoller, ApiException, NetworkErrorMapper
 │
 ├── data/                               // Data layer implementations
-│   ├── repository/                     // Repository implementations
-│   │   ├── AuthRepositoryImpl.kt       // Authentication & session repository
-│   │   ├── TelemetryRepositoryImpl.kt  // GPS telemetry & buffer repository
-│   │   └── IncidentRepositoryImpl.kt   // Incident reporting repository
-│   ├── remote/                         // Remote HTTP networking
-│   │   ├── api/                        // Retrofit / Ktor API interface definitions
-│   │   │   └── WayMateApiService.kt    // All REST endpoint declarations
-│   │   ├── model/                      // Data Transfer Objects (DTOs)
-│   │   │   ├── request/                // Request payloads (e.g., LoginRequestDto.kt)
-│   │   │   └── response/               // Response payloads (e.g., LiveUnitDto.kt)
-│   │   └── mapper/                     // DTO <-> Domain model transformation functions
-│   │       ├── AuthMapper.kt
-│   │       ├── TelemetryMapper.kt
-│   │       └── IncidentMapper.kt
-│   └── local/                          // Local persistence & offline buffering
-│       ├── dao/                        // Room Data Access Objects
-│       │   ├── TelemetryQueueDao.kt    // Offline telemetry buffer DAO
-│       │   └── IncidentQueueDao.kt     // Offline incident buffer DAO
-│       ├── entity/                     // Room SQLite database entities
-│       │   ├── TelemetryQueueEntity.kt // Queued location ping entity
-│       │   └── IncidentQueueEntity.kt  // Queued incident report entity
-│       └── mapper/                     // Entity <-> Domain model transformation functions
-│           └── LocalStorageMapper.kt
+│   ├── dto/                            // Request / Response DTOs (Kotlinx Serialization)
+│   ├── local/                          // SQLite storage (WayMateDatabaseHelper, store-and-forward)
+│   ├── location/                       // Native Android LocationManager data source
+│   ├── mapper/                         // DTO/Entity <-> Domain model mappers
+│   ├── network/                        // REST Retrofit APIs & LocationWebSocketClient
+│   ├── repository/                     // Real & Fake repository implementations
+│   ├── session/                        // KeystoreSessionStorage & OnboardingPreferences
+│   └── sync/                           // OfflineSyncManager (drains queued actions to Cloudflare D1)
 │
-├── domain/                             // Pure Kotlin business rules & contracts (NO Android imports)
-│   ├── model/                          // Business entities
-│   │   ├── User.kt                     // User profile, identity, callsign
-│   │   ├── UserRole.kt                 // Enum: Owner, Commander, TeamLead
-│   │   ├── Team.kt                     // Team metadata, roster, vehicle specs
-│   │   ├── LocationPing.kt             // Coordinates, accuracy, speed, timestamp
-│   │   ├── OperationalStatus.kt        // Enum: Normal, Pursuing, Engaged
-│   │   ├── LiveUnit.kt                 // Composite model for live situational map
-│   │   ├── Incident.kt                 // Incident report model
-│   │   └── LinkHealth.kt               // Communication status (Online, Stale, Offline)
-│   ├── repository/                     // Abstract repository interfaces
-│   │   ├── AuthRepository.kt           // Contract for login, logout, session query
-│   │   ├── TelemetryRepository.kt      // Contract for location uplink & live feed
-│   │   └── IncidentRepository.kt       // Contract for quick alerts & reports
-│   └── usecase/                        // Orchestration use cases (introduced as needed)
-│       ├── SubmitLocationPingUseCase.kt// Validates fix, sends online or queues offline
-│       ├── DispatchQuickAlertUseCase.kt// High-priority emergency trigger
-│       └── SyncOfflineQueueUseCase.kt  // Drains local SQLite buffer upon reconnect
+├── domain/                             // Pure Kotlin business rules & contracts (Zero Android dependencies)
+│   ├── model/                          // User, Team, ManagedUser, LocationPing, PointOfInterest, etc.
+│   └── repository/                     // AuthRepository, TeamRepository, StatusRepository, PointOfInterestRepository
 │
-└── ui/                                 // Presentation layer (Jetpack Compose & ViewModels)
-    ├── navigation/                     // Screen routing and navigation graph
-    │   ├── WayMateNavGraph.kt          // NavHost and composable route definitions
-    │   └── Screen.kt                   // Sealed class defining type-safe route destinations
-    ├── theme/                          // Design tokens & styling
-    │   ├── Color.kt                    // Dark Tactical color tokens (OLED dark, status colors)
-    │   ├── Theme.kt                    // WayMateTheme Composable definition
-    │   └── Type.kt                     // Typography configuration with Persian font support
-    ├── common/                         // Reusable tactical UI components
-    │   ├── TacticalTopBar.kt           // Top app bar with connectivity indicator
-    │   ├── StatusBadge.kt              // Green/Amber/Red tactical status chip
-    │   ├── QuickActionButton.kt        // Floating Action Button for emergency alerts
-    │   └── ErrorDialog.kt              // Standardized error alert modal
-    ├── auth/                           // Authentication feature
-    │   ├── LoginScreen.kt              // Compose login screen
-    │   ├── LoginViewModel.kt           // Handles authentication business flow
-    │   └── LoginUiState.kt             // Sealed class / data class for login state
-    ├── tracking/                       // Field Tracking & Tactical Map feature
-    │   ├── TrackingScreen.kt           // Tactical Map screen with Compose map view
-    │   ├── TrackingViewModel.kt        // Manages location updates, status, and alerts
-    │   ├── TrackingUiState.kt          // Current tracking state (Active, Paused, Offline)
-    │   └── StatusSelectorSheet.kt      // Bottom sheet for 2-tap status change
-    └── incidents/                      // Incident Reporting feature
-        ├── IncidentReportScreen.kt     // Structured incident form
-        ├── IncidentViewModel.kt        // Form validation and submission
-        └── IncidentUiState.kt          // Form field states, validation errors, submit progress
+├── service/                            // Background execution & system integrations
+│   ├── LocationSharingService.kt       // Foreground service (FOREGROUND_SERVICE_TYPE_LOCATION)
+│   └── WayMateNotificationManager.kt   // 15-class tactical notification system across 6 channels
+│
+└── ui/                                 // Presentation layer (Jetpack Compose, RTL, ViewModels)
+    ├── auth/                           // LoginScreen, LoginViewModel, LoginUiState
+    ├── common/                         // TacticalButton, TacticalTextField, TacticalFeedbackBanner
+    ├── designsystem/                   // Custom Tactical Design System:
+    │   ├── CircularOrbitNavigationBar.kt // Curved 5-destination orbit bar with RTL cyan glow
+    │   ├── TacticalAreaChart.kt        // Responsive readiness & response area curve
+    │   ├── TacticalIcons.kt            // Custom tactical vector iconography library
+    │   ├── WayMateComponents.kt        // Reusable tactical cards, metric chips, status badges
+    │   └── WayMateLoaders.kt           // Tactical radar pulse and orbital loaders
+    ├── home/                           // 5 Primary & 2 Secondary destinations:
+    │   ├── HomeScreen.kt               // HorizontalPager host orchestrating navigation & gestures
+    │   ├── HomeViewModel.kt            // Central state holder & business orchestrator
+    │   ├── HomeUiState.kt              // Immutable composite UI state
+    │   ├── OverviewScreen.kt           // Tab 1: Readiness chart, metrics, quick actions (Default)
+    │   ├── LiveMapScreen.kt            // Tab 0: Tactical Canvas GIS map, route simulation, teammates
+    │   ├── TeamsScreen.kt              // Tab 2: Group management, member roles, squad rosters
+    │   ├── OperationsScreen.kt         // Tab 3: Tactical comms, broadcast orders, status dispatch
+    │   ├── ProfileScreen.kt            // Tab 4: User operational identity & secondary navigation
+    │   ├── SettingsScreen.kt           // Secondary: Map layers, GPS accuracy, notifications, sync
+    │   ├── AboutScreen.kt              // Secondary: System architecture, version info, privacy pledge
+    │   └── map/                        // TacticalMapCanvas, GIS repositories, layers sheet, POI dialogs
+    ├── navigation/                     // AppDestination (Onboarding, Login, Home)
+    ├── onboarding/                     // OnboardingScreen (3-slide interactive walkthrough)
+    └── theme/                          // WayMateMidnightDark tactical palette, RTL typography
 ```
 
 ---
 
-## 5. Initial Application and Navigation Flow
+## 5. Application and Navigation Flow
 
-### 5.1 Application Startup and Authentication Gate
+### 5.1 Application Startup, Onboarding, and Authentication Gate
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Startup: App Process Created
-    Startup --> CheckSession: Read Token from TokenManager
+    [*] --> Startup: App Process Created (MainActivity)
+    Startup --> SplashTheme: Display Animated Theme.WayMate.Splash
+    SplashTheme --> CheckOnboarding: Query OnboardingPreferences
+
+    CheckOnboarding --> OnboardingScreen: First Launch (!isCompleted)
+    CheckOnboarding --> CheckSession: Already Completed
+
+    state OnboardingScreen {
+        Slide1_Compass --> Slide2_LiveLocation: Swipe / Next
+        Slide2_LiveLocation --> Slide3_OfflineGIS: Swipe / Next
+        Slide1_Compass --> CompleteOnboarding: Skip Tap
+        Slide2_LiveLocation --> CompleteOnboarding: Skip Tap
+        Slide3_OfflineGIS --> CompleteOnboarding: Finish Tap
+    }
+
+    CompleteOnboarding --> CheckSession: Save isCompleted = true
+
     CheckSession --> LoginScreen: Token Missing / Expired
-    CheckSession --> MainNavigation: Token Valid
+    CheckSession --> HomeHub: Valid Token in Keystore
 
     state LoginScreen {
-        Idle --> Submitting: Tap "Sign In"
-        Submitting --> AuthSuccess: HTTP 200 (JWT)
-        Submitting --> AuthFailed: HTTP 401 / Network Error
-        AuthFailed --> Idle: Display Error Banner
+        LoginIdle --> Authenticating: Submit Callsign & Password
+        Authenticating --> TokenStored: HTTP 200 (JWT)
+        Authenticating --> LoginError: HTTP 401 / Network Timeout
+        LoginError --> LoginIdle: Show TacticalFeedbackBanner
     }
 
-    AuthSuccess --> MainNavigation: Store Token & Navigate
+    TokenStored --> HomeHub: Navigate to Home(User)
 
-    state MainNavigation {
-        [*] --> TrackingScreen: Role = TeamLead
-        [*] --> CommanderScreen: Role = Commander / Owner (Proposed)
+    state HomeHub {
+        [*] --> OverviewScreen: Default Initial Page (Index 1)
+        
+        OverviewScreen --> LiveMapScreen: Orbit Tap / Swipe Right
+        OverviewScreen --> TeamsScreen: Orbit Tap / Swipe Left
+        TeamsScreen --> OperationsScreen: Orbit Tap / Swipe Left
+        OperationsScreen --> ProfileScreen: Orbit Tap / Swipe Left
 
-        TrackingScreen --> IncidentReportScreen: Tap "New Report"
-        IncidentReportScreen --> TrackingScreen: Submit / Cancel
+        ProfileScreen --> SettingsScreen: Tap "تنظیمات سامانه"
+        ProfileScreen --> AboutScreen: Tap "درباره وی‌میت"
+        
+        SettingsScreen --> ProfileScreen: Tap Back / System Back
+        AboutScreen --> ProfileScreen: Tap Back / System Back
+
+        LiveMapScreen --> OverviewScreen: System Back
+        TeamsScreen --> OverviewScreen: System Back
+        OperationsScreen --> OverviewScreen: System Back
+        ProfileScreen --> OverviewScreen: System Back
     }
 
-    MainNavigation --> LoginScreen: User Logs Out / Token Revoked (401)
+    HomeHub --> LoginScreen: User Logs Out / Session Expired
 ```
 
-### 5.2 Initial Navigation Destinations
-1. **`Screen.Login`**:
-   - Starting point for unauthenticated users.
-   - Collects credentials, shows loading spinner during auth, presents localized error messages.
-2. **`Screen.Tracking`** (Main Destination for Field Team Leads):
-   - Tactical map canvas with current location reticle.
-   - Quick Action floating emergency button.
-   - Tactical status selector chip (`Normal`, `Pursuing`, `Engaged`).
-   - Connectivity health indicator banner (`Online`, `Offline — X items queued`).
-3. **`Screen.IncidentReport`**:
-   - Accessible from Tracking screen via menu or button.
-   - Allows detailed incident submission (type, notes, coordinates).
-4. **`Screen.Commander`** (Proposed for Phase 2B / Milestone 3):
-   - Multi-unit tactical map overview displaying all deployed teams.
+### 5.2 Primary Navigation Destinations (Circular Orbit Hub)
+1. **`Tab 0: LiveMapScreen` (نقشه زنده)**:
+   - Fullscreen 2D Compose Canvas map rendering Jahrom GIS vector layers.
+   - Paging swipe is disabled on this tab to isolate canvas touch panning and zooming (`+`/`-`).
+   - Teammate location reticles, route simulation engine (Haversine/bearings), and POI markers.
+2. **`Tab 1: OverviewScreen` (نمای کلی — Default Initial Destination)**:
+   - Operational readiness curve (`TacticalAreaChart`) with responsive touch scrubbing.
+   - Quick action shortcuts (Emergency SOS, Live Location toggle, Map shortcuts).
+   - Real-time connection status banner and offline sync indicator.
+3. **`Tab 2: TeamsScreen` (تیم‌ها)**:
+   - Team roster, patrol unit management, vehicle registration, and squad member role assignment.
+4. **`Tab 3: OperationsScreen` (عملیات)**:
+   - Priority broadcast orders with read receipts and acknowledgement (`تأییدشده ✓`).
+   - Operational status selector chips (`NORMAL`, `PURSUING`, `ENGAGED`).
+   - Offline queue monitor with manual sync trigger.
+5. **`Tab 4: ProfileScreen` (پروفایل)**:
+   - Operational identity, callsign, assigned unit, and clearance level.
+   - Routing to secondary screens: `SettingsScreen` and `AboutScreen`.
 
 ---
 
