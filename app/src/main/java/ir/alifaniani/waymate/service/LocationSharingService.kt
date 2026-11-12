@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
@@ -193,10 +194,14 @@ class LocationSharingService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        val largeIconBitmap = runCatching {
+            BitmapFactory.decodeResource(resources, R.drawable.ic_large_notify_location)
+        }.getOrNull()
+
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("اشتراک‌گذاری زنده موقعیت در گروه کوهنوردی")
             .setContentText(contentText)
-            .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+            .setSmallIcon(R.drawable.ic_stat_notify_location)
             .setOngoing(true)
             .setContentIntent(openAppPendingIntent)
             .addAction(
@@ -206,7 +211,12 @@ class LocationSharingService : Service() {
             )
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
+
+        if (largeIconBitmap != null) {
+            builder.setLargeIcon(largeIconBitmap)
+        }
+
+        return builder.build()
     }
 
     private fun updateNotification(contentText: String) {

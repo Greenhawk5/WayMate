@@ -1,5 +1,6 @@
 package ir.alifaniani.waymate.ui.home
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -26,10 +27,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ir.alifaniani.waymate.R
 import ir.alifaniani.waymate.domain.model.LocationSharingState
 import ir.alifaniani.waymate.domain.model.LocationSharingStatus
 import ir.alifaniani.waymate.ui.common.BadgeTone
@@ -38,6 +42,7 @@ import ir.alifaniani.waymate.ui.common.TacticalFeedbackBanner
 import ir.alifaniani.waymate.ui.common.TacticalOutlinedButton
 import ir.alifaniani.waymate.ui.common.TacticalPrimaryButton
 import ir.alifaniani.waymate.ui.common.TacticalStatusBadge
+import ir.alifaniani.waymate.ui.designsystem.TacticalIcons
 
 /**
  * Dedicated control panel for consent-based real-time location sharing.
@@ -202,13 +207,15 @@ fun LocationSharingControlCard(
             // Action Buttons
             if (isSharing) {
                 TacticalOutlinedButton(
-                    text = "توقف اشتراک‌گذاری موقعیت (⏹)",
+                    text = "توقف اشتراک‌گذاری موقعیت",
+                    leadingIcon = TacticalIcons.Stop,
                     onClick = onStopSharing,
                     isDestructive = true
                 )
             } else {
                 TacticalPrimaryButton(
-                    text = "شروع اشتراک‌گذاری موقعیت (▶)",
+                    text = "شروع اشتراک‌گذاری موقعیت",
+                    leadingIcon = TacticalIcons.Play,
                     onClick = onStartSharing,
                     isLoading = sharingState.status == LocationSharingStatus.STARTING
                 )
@@ -236,11 +243,24 @@ fun LocationPermissionRationaleDialog(
             )
         },
         text = {
-            Text(
-                text = "وای‌میت برای نمایش موقعیت زندهٔ شما به همنوردان گروه در طول پیمایش و حفظ ایمنی شما در زمان قفل بودن صفحه، نیازمند مجوز موقعیت مکانی و نمایش یک اعلان ماندگار است.\n\nاطلاعات مکانی شما بدون درخواست مستقیم خودتان ارسال نمی‌شود و هر زمان بخواهید می‌توانید اشتراک‌گذاری را فوراً متوقف کنید.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.img_empty_location_access),
+                    contentDescription = "دسترسی موقعیت مکانی",
+                    modifier = Modifier
+                        .size(120.dp)
+                        .padding(bottom = 12.dp),
+                    contentScale = ContentScale.Fit
+                )
+                Text(
+                    text = "وای‌میت برای نمایش موقعیت زندهٔ شما به همنوردان گروه در طول پیمایش و حفظ ایمنی شما در زمان قفل بودن صفحه، نیازمند مجوز موقعیت مکانی و نمایش یک اعلان ماندگار است.\n\nاطلاعات مکانی شما بدون درخواست مستقیم خودتان ارسال نمی‌شود و هر زمان بخواهید می‌توانید اشتراک‌گذاری را فوراً متوقف کنید.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
         },
         confirmButton = {
             TextButton(onClick = onConfirm) {
@@ -286,15 +306,28 @@ fun LocationPermissionDeniedDialog(
             )
         },
         text = {
-            Text(
-                text = if (isPermanentlyDenied) {
-                    "مجوز دسترسی به موقعیت مکانی برای اشتراک‌گذاری با همنوردان گروه الزامی است. با توجه به رد شدن مجوز، لطفاً از بخش تنظیمات برنامه دسترسی موقعیت را فعال نمایید."
-                } else {
-                    "برای نمایش و ارسال موقعیت زنده به همنوردان گروه، اعطای دسترسی به موقعیت مکانی الزامی است."
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.img_empty_location_access),
+                    contentDescription = "عدم دسترسی به موقعیت",
+                    modifier = Modifier
+                        .size(120.dp)
+                        .padding(bottom = 12.dp),
+                    contentScale = ContentScale.Fit
+                )
+                Text(
+                    text = if (isPermanentlyDenied) {
+                        "مجوز دسترسی به موقعیت مکانی برای اشتراک‌گذاری با همنوردان گروه الزامی است. با توجه به رد شدن مجوز، لطفاً از بخش تنظیمات برنامه دسترسی موقعیت را فعال نمایید."
+                    } else {
+                        "برای نمایش و ارسال موقعیت زنده به همنوردان گروه، اعطای دسترسی به موقعیت مکانی الزامی است."
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
         },
         confirmButton = {
             TextButton(

@@ -28,13 +28,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import ir.alifaniani.waymate.R
 import ir.alifaniani.waymate.domain.model.GroupMemberLocation
 import ir.alifaniani.waymate.domain.model.PointOfInterest
 import ir.alifaniani.waymate.ui.common.BadgeTone
 import ir.alifaniani.waymate.ui.common.BannerType
+import ir.alifaniani.waymate.ui.common.TacticalEmptyStateCard
 import ir.alifaniani.waymate.ui.common.TacticalFeedbackBanner
 import ir.alifaniani.waymate.ui.common.TacticalOutlinedButton
 import ir.alifaniani.waymate.ui.common.TacticalStatusBadge
+import ir.alifaniani.waymate.ui.designsystem.TacticalIcons
 import ir.alifaniani.waymate.ui.home.map.AssetGisLayerRepository
 import ir.alifaniani.waymate.ui.home.map.BaseMapPresentation
 import ir.alifaniani.waymate.ui.home.map.HikingSimulationBar
@@ -186,12 +189,14 @@ fun TacticalMapAndLinkSection(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 TacticalOutlinedButton(
-                    text = if (isSimulationBarVisible) "بستن شبیه‌ساز" else "شبیه‌ساز پیمایش ⛰",
+                    text = if (isSimulationBarVisible) "بستن شبیه‌ساز" else "شبیه‌ساز پیمایش",
+                    leadingIcon = if (isSimulationBarVisible) TacticalIcons.Close else TacticalIcons.Mountain,
                     onClick = { isSimulationBarVisible = !isSimulationBarVisible },
                     modifier = Modifier.weight(1f)
                 )
                 TacticalOutlinedButton(
-                    text = "نقطه جدید (+)",
+                    text = "نقطه جدید",
+                    leadingIcon = TacticalIcons.Plus,
                     onClick = onOpenCreatePointDialog,
                     modifier = Modifier.weight(1f)
                 )
@@ -287,6 +292,18 @@ fun TacticalMapAndLinkSection(
                 SelectedMarkerCard(
                     marker = mapState.selectedMarker!!,
                     onDismiss = { mapState = mapState.copy(selectedMarker = null) }
+                )
+            }
+
+            // Empty State when no Points of Interest are registered
+            if (points.isEmpty() && selectedPoint == null && mapState.selectedMarker == null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                TacticalEmptyStateCard(
+                    illustrationResId = R.drawable.img_empty_no_saved_location,
+                    title = "هیچ نقطه نشانه‌ای ثبت نشده است",
+                    description = "برای علامت‌گذاری نقاط مهم مسیر، چشمه‌ها و محل‌های استقرار، دکمه «نقطه جدید (+)\" را لمس کنید.",
+                    actionText = "افزودن اولین نشانه (+)",
+                    onActionClicked = onOpenCreatePointDialog
                 )
             }
 

@@ -57,13 +57,14 @@ backend/.dev.vars
 *.logcat
 /docs/device-screenshots/
 /docs/device_screenshots/
+/docs/superpowers/plans/2026-11-06-complete-asset-and-device-qa.md
+/docs/superpowers/plans/2026-11-06-visual-asset-integration.md
 
 # ------------------------------------------------------------------------------
 # 5. Local Scratch, Design Sources & External References
 # ------------------------------------------------------------------------------
 /Atak project/
 /temp/
-/app/src/icon/
 todo.md
 
 # ------------------------------------------------------------------------------

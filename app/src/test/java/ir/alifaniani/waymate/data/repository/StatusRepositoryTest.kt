@@ -110,4 +110,54 @@ class StatusRepositoryTest {
         val result = repository.updateOperationalStatus(OperationalStatus.ENGAGED)
         assertTrue(result is Result.Error)
     }
+
+    @Test
+    fun realStatusRepository_updateOperationalStatus_withOfflineStorage_persistsAndSyncsLiveStatuses() = runBlocking {
+        val storage = ir.alifaniani.waymate.data.local.InMemoryOfflineStorage()
+        storage.saveStatuses(
+            listOf(
+                TeamLiveStatus(
+                    teamId = "team_alpha_001",
+                    teamName = "گشت آلفا",
+                    callsign = "Falcon-Lead",
+                    operationalStatus = OperationalStatus.NORMAL,
+                    connectionStatus = ConnectionStatus.ONLINE,
+                    lastSeenAt = 1000L,
+                    isStale = false
+                )
+            )
+        )
+
+        val fakeApi = object : StatusApiService {
+            override suspend fun getLiveUnits(): Response<ApiResponseDto<List<LiveUnitDto>>> {
+                val list = listOf(
+                    LiveUnitDto(
+                        teamId = "team_alpha_001",
+                        teamName = "گشت آلفا",
+                        callsign = "Falcon-Lead",
+                        operationalStatus = "NORMAL",
+                        lastSeenAt = 2000L,
+                        connectionStatus = "ONLINE",
+                        isStale = false
+                    )
+                )
+                return Response.success(ApiResponseDto(success = true, data = list))
+            }
+
+            override suspend fun updateOperationalStatus(request: UpdateOperationalStatusRequestDto): Response<ApiResponseDto<UpdateOperationalStatusResponseDto>> {
+                val errorBody = "{\"success\":false,\"error\":{\"code\":\"FORBIDDEN\",\"message\":\"دسترسی غیرمجاز\"}}"
+                    .toResponseBody("application/json".toMediaType())
+                return Response.error(403, errorBody)
+            }
+        }
+
+        val repository = RealStatusRepository(fakeApi, testDispatcherProvider, storage)
+        val updateResult = repository.updateOperationalStatus(OperationalStatus.PURSUING)
+        assertTrue(updateResult is Result.Success)
+        assertEquals(OperationalStatus.PURSUING, repository.getMyOperationalStatus())
+
+        val liveResult = repository.getLiveTeamStatuses()
+        assertTrue(liveResult is Result.Success)
+        assertEquals(OperationalStatus.PURSUING, (liveResult as Result.Success).data.first().operationalStatus)
+    }
 }

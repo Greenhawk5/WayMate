@@ -40,6 +40,12 @@ class AssetGisLayerRepository(
 
     override suspend fun loadJahromVectors(): List<GisLineSegment> {
         cachedSegments?.let { return it }
+        if (inputStreamProvider == null && context != null) {
+            sharedAssetSegments?.let {
+                cachedSegments = it
+                return it
+            }
+        }
 
         return withContext(ioDispatcher) {
             try {
@@ -58,6 +64,9 @@ class AssetGisLayerRepository(
 
                 val segments = parseJsonStream(inputStream)
                 cachedSegments = segments
+                if (inputStreamProvider == null && context != null && segments.isNotEmpty()) {
+                    sharedAssetSegments = segments
+                }
                 segments
             } catch (e: Exception) {
                 // Return fallback minimal segments if assets missing or on unhandled error
@@ -71,6 +80,9 @@ class AssetGisLayerRepository(
     override fun getBoundingBox(): GisBoundingBox = boundingBox
 
     companion object {
+        @Volatile
+        private var sharedAssetSegments: List<GisLineSegment>? = null
+
         private val jsonParser = Json {
             ignoreUnknownKeys = true
             isLenient = true

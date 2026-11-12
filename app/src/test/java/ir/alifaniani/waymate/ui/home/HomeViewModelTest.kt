@@ -474,4 +474,76 @@ class HomeViewModelTest {
         viewModel.selectGroupMember(null)
         assertNull(viewModel.uiState.value.selectedGroupMember)
     }
+
+    @Test
+    fun updateOperationalStatus_repeatedSwitching_synchronizesLiveStatusesAndPersists() {
+        viewModel.updateOperationalStatus(OperationalStatus.PURSUING)
+        assertEquals(OperationalStatus.PURSUING, viewModel.uiState.value.myOperationalStatus)
+        assertEquals(OperationalStatus.PURSUING, viewModel.uiState.value.liveStatuses.first().operationalStatus)
+
+        viewModel.updateOperationalStatus(OperationalStatus.ENGAGED)
+        assertEquals(OperationalStatus.ENGAGED, viewModel.uiState.value.myOperationalStatus)
+        assertEquals(OperationalStatus.ENGAGED, viewModel.uiState.value.liveStatuses.first().operationalStatus)
+
+        viewModel.updateOperationalStatus(OperationalStatus.NORMAL)
+        assertEquals(OperationalStatus.NORMAL, viewModel.uiState.value.myOperationalStatus)
+        assertEquals(OperationalStatus.NORMAL, viewModel.uiState.value.liveStatuses.first().operationalStatus)
+    }
+
+    @Test
+    fun createTeam_multipleSequentialCreations_preservesAllGroupsInState() {
+        val initialCount = viewModel.uiState.value.teams.size
+
+        viewModel.createTeam(
+            name = "گروه عملیاتی ۱",
+            leadUserId = "usr_lead_001",
+            vehicleType = "هایلوکس",
+            vehiclePlate = "۱۱-الف-۱۱",
+            equipmentSummary = "بی‌سیم",
+            members = emptyList(),
+            userRole = UserRole.COMMANDER
+        )
+        viewModel.createTeam(
+            name = "گروه عملیاتی ۲",
+            leadUserId = "usr_lead_001",
+            vehicleType = "پاترول",
+            vehiclePlate = "۲۲-ب-۲۲",
+            equipmentSummary = "پهپاد",
+            members = emptyList(),
+            userRole = UserRole.COMMANDER
+        )
+        viewModel.createTeam(
+            name = "گروه عملیاتی ۳",
+            leadUserId = "usr_lead_001",
+            vehicleType = "رونیز",
+            vehiclePlate = "۳۳-ج-۳۳",
+            equipmentSummary = "کیت امداد",
+            members = emptyList(),
+            userRole = UserRole.COMMANDER
+        )
+
+        val teams = viewModel.uiState.value.teams
+        assertEquals(initialCount + 3, teams.size)
+        assertTrue(teams.any { it.name == "گروه عملیاتی ۱" })
+        assertTrue(teams.any { it.name == "گروه عملیاتی ۲" })
+        assertTrue(teams.any { it.name == "گروه عملیاتی ۳" })
+    }
+
+    @Test
+    fun toggleTeamStatus_deactivateAndReactivate_updatesGroupStateAccurately() {
+        val targetTeam = viewModel.uiState.value.teams.first()
+        assertTrue(targetTeam.isActive)
+
+        // Deactivate
+        viewModel.toggleTeamStatus(targetTeam, UserRole.COMMANDER)
+        val afterDeactivate = viewModel.uiState.value.teams.first { it.id == targetTeam.id }
+        assertFalse(afterDeactivate.isActive)
+        assertFalse(viewModel.uiState.value.isManagementFeedbackError)
+
+        // Reactivate
+        viewModel.toggleTeamStatus(afterDeactivate, UserRole.COMMANDER)
+        val afterReactivate = viewModel.uiState.value.teams.first { it.id == targetTeam.id }
+        assertTrue(afterReactivate.isActive)
+        assertFalse(viewModel.uiState.value.isManagementFeedbackError)
+    }
 }

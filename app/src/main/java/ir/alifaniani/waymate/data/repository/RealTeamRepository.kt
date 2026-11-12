@@ -40,7 +40,7 @@ class RealTeamRepository(
                     val body = response.body()
                     val teamDtos = body?.data
                     if (body != null && body.success && teamDtos != null) {
-                        val teams = if (fetchDetails && teamDtos.isNotEmpty()) {
+                        val activeTeams = if (fetchDetails && teamDtos.isNotEmpty()) {
                             teamDtos.map { dto ->
                                 try {
                                     val detailResponse = teamApiService.getTeamById(dto.id)
@@ -57,8 +57,9 @@ class RealTeamRepository(
                         } else {
                             teamDtos.map { it.toDomain() }
                         }
-                        offlineStorage?.saveTeams(teams)
-                        Result.Success(teams)
+                        val mergedTeams = mergeWithLocalTeams(activeTeams, fetchDetails)
+                        offlineStorage?.saveTeams(mergedTeams)
+                        Result.Success(mergedTeams)
                     } else {
                         val cached = offlineStorage?.getCachedTeams()
                         if (!cached.isNullOrEmpty()) {
@@ -155,7 +156,9 @@ class RealTeamRepository(
             if (response.isSuccessful) {
                 val body = response.body()
                 if (body != null && body.success && body.data != null) {
-                    Result.Success(body.data.toDomain())
+                    val createdTeam = body.data.toDomain()
+                    upsertCachedTeam(createdTeam)
+                    Result.Success(createdTeam)
                 } else {
                     val errorMsg = body?.error?.message ?: "خطا در ایجاد گروه عملیاتی"
                     Result.Error(ApiException.ServerError(response.code(), errorMsg), errorMsg)
@@ -179,6 +182,7 @@ class RealTeamRepository(
                     memberCount = members.size,
                     isActive = true
                 )
+                upsertCachedTeam(optimisticTeam)
                 offlineStorage.enqueueAction(
                     QueuedAction(
                         id = UUID.randomUUID().toString(),
@@ -217,7 +221,18 @@ class RealTeamRepository(
             if (response.isSuccessful) {
                 val body = response.body()
                 if (body != null && body.success && body.data != null) {
-                    Result.Success(body.data.toDomain())
+                    val existingTeam = offlineStorage?.getCachedTeams()?.firstOrNull { it.id == teamId }
+                    val serverTeam = body.data.toDomain()
+                    val mergedTeam = if (serverTeam.members.isEmpty() && existingTeam != null && existingTeam.members.isNotEmpty()) {
+                        serverTeam.copy(
+                            members = existingTeam.members,
+                            memberCount = serverTeam.memberCount.coerceAtLeast(existingTeam.members.size)
+                        )
+                    } else {
+                        serverTeam
+                    }
+                    upsertCachedTeam(mergedTeam)
+                    Result.Success(mergedTeam)
                 } else {
                     val errorMsg = body?.error?.message ?: "خطا در به‌روزرسانی گروه عملیاتی"
                     Result.Error(ApiException.ServerError(response.code(), errorMsg), errorMsg)
@@ -228,9 +243,73 @@ class RealTeamRepository(
                 Result.Error(Exception(errorMessage), errorMessage)
             }
         } catch (e: Exception) {
-            val errorMessage = NetworkErrorMapper.mapThrowable(e)
-            Result.Error(ApiException.NetworkUnavailable(errorMessage), errorMessage)
+            val existingTeam = offlineStorage?.getCachedTeams()?.firstOrNull { it.id == teamId }
+            if (existingTeam != null) {
+                val updatedLocalTeam = existingTeam.copy(
+                    name = name ?: existingTeam.name,
+                    leadUserId = leadUserId ?: existingTeam.leadUserId,
+                    vehicleType = vehicleType ?: existingTeam.vehicleType,
+                    vehiclePlate = vehiclePlate ?: existingTeam.vehiclePlate,
+                    equipmentSummary = equipmentSummary ?: existingTeam.equipmentSummary,
+                    isActive = isActive ?: existingTeam.isActive
+                )
+                upsertCachedTeam(updatedLocalTeam)
+                Result.Success(updatedLocalTeam)
+            } else {
+                val errorMessage = NetworkErrorMapper.mapThrowable(e)
+                Result.Error(ApiException.NetworkUnavailable(errorMessage), errorMessage)
+            }
         }
+    }
+
+    private suspend fun upsertCachedTeam(team: Team) {
+        val storage = offlineStorage ?: return
+        val cached = storage.getCachedTeams().toMutableList()
+        val idx = cached.indexOfFirst { it.id == team.id }
+        if (idx != -1) {
+            cached[idx] = team
+        } else {
+            cached.add(team)
+        }
+        storage.saveTeams(cached)
+    }
+
+    private suspend fun mergeWithLocalTeams(
+        activeServerTeams: List<Team>,
+        fetchDetails: Boolean
+    ): List<Team> {
+        val storage = offlineStorage ?: return activeServerTeams
+        val cachedTeams = storage.getCachedTeams()
+        if (cachedTeams.isEmpty()) return activeServerTeams
+
+        val serverIds = activeServerTeams.mapTo(mutableSetOf()) { it.id }
+        val result = activeServerTeams.toMutableList()
+
+        for (cached in cachedTeams) {
+            if (cached.id in serverIds) continue
+            if (!cached.isActive) {
+                // Backend GET /api/v1/teams only returns is_active = 1 teams, whereas GET /api/v1/teams/:id
+                // returns deactivated teams as well. Refresh or preserve deactivated teams so they remain
+                // visible with their inactive status and can be reactivated.
+                val refreshedInactive = if (fetchDetails) {
+                    try {
+                        val detailResponse = teamApiService.getTeamById(cached.id)
+                        val detailBody = detailResponse.body()
+                        if (detailResponse.isSuccessful && detailBody != null && detailBody.success && detailBody.data != null) {
+                            detailBody.data.toDomain()
+                        } else {
+                            cached
+                        }
+                    } catch (_: Exception) {
+                        cached
+                    }
+                } else {
+                    cached
+                }
+                result.add(refreshedInactive)
+            }
+        }
+        return result
     }
 
     override suspend fun addMember(

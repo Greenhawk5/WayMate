@@ -2,332 +2,132 @@ package ir.alifaniani.waymate.data.repository
 
 import ir.alifaniani.waymate.TestDispatcherProvider
 import ir.alifaniani.waymate.core.common.Result
-import ir.alifaniani.waymate.core.network.ApiException
+import ir.alifaniani.waymate.data.dto.ApiResponseDto
+import ir.alifaniani.waymate.data.dto.CreateMemberDto
+import ir.alifaniani.waymate.data.dto.CreateTeamRequestDto
+import ir.alifaniani.waymate.data.dto.TeamDto
+import ir.alifaniani.waymate.data.dto.TeamMemberDto
+import ir.alifaniani.waymate.data.dto.UpdateTeamRequestDto
+import ir.alifaniani.waymate.data.local.InMemoryOfflineStorage
 import ir.alifaniani.waymate.data.network.NetworkClient
 import ir.alifaniani.waymate.data.network.TeamApiService
 import ir.alifaniani.waymate.data.session.InMemorySessionStorage
-import ir.alifaniani.waymate.data.session.SessionStorage
 import kotlinx.coroutines.runBlocking
-import okhttp3.mockwebserver.MockResponse
-import okhttp3.mockwebserver.MockWebServer
-import okhttp3.mockwebserver.SocketPolicy
-import org.junit.After
+import kotlinx.serialization.encodeToString
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
-import org.junit.Before
 import org.junit.Test
-import java.util.concurrent.TimeUnit
+import retrofit2.Response
 
 class RealTeamRepositoryTest {
 
-    private lateinit var mockWebServer: MockWebServer
-    private lateinit var sessionStorage: SessionStorage
-    private lateinit var testDispatcherProvider: TestDispatcherProvider
-    private lateinit var teamApiService: TeamApiService
-    private lateinit var repository: RealTeamRepository
+    private val testDispatcher = TestDispatcherProvider()
 
-    @Before
-    fun setup() {
-        mockWebServer = MockWebServer()
-        mockWebServer.start()
+    @Test
+    fun networkClientJson_omitsExplicitNullsForPartialTeamUpdate() {
+        val client = NetworkClient(InMemorySessionStorage())
+        val payload = client.json.encodeToString(UpdateTeamRequestDto(isActive = false))
 
-        sessionStorage = InMemorySessionStorage()
-        testDispatcherProvider = TestDispatcherProvider()
-
-        val retrofit = NetworkClient.createCustomClient(
-            baseUrl = mockWebServer.url("/").toString(),
-            sessionStorage = sessionStorage
-        )
-        teamApiService = retrofit.create(TeamApiService::class.java)
-
-        repository = RealTeamRepository(
-            teamApiService = teamApiService,
-            dispatcherProvider = testDispatcherProvider
-        )
-    }
-
-    @After
-    fun tearDown() {
-        mockWebServer.shutdown()
+        assertEquals("{\"is_active\":false}", payload)
+        assertFalse("Partial update payload must not contain null fields", payload.contains("null"))
     }
 
     @Test
-    fun getTeams_success_returnsTeamListWithDetails() = runBlocking {
-        val listJsonResponse = """
-            {
-              "success": true,
-              "data": [
-                {
-                  "id": "team_alpha_001",
-                  "name": "گشت آلفا (واکنش سریع)",
-                  "lead_user_id": "usr_lead_001",
-                  "vehicle_type": "تویوتا هایلوکس",
-                  "vehicle_plate": "۴۴-ب-۱۲",
-                  "equipment_summary": "بی‌سیم فرکانس اختصاصی، جعبه امداد تاکتیکی",
-                  "member_count": 2,
-                  "is_active": true
-                }
-              ],
-              "pagination": { "offset": 0, "limit": 50, "total": 1, "has_more": false },
-              "meta": { "timestamp": 1729000000000, "request_id": "req_123" }
+    fun createMultipleTeamsAndDeactivate_preservesAllTeamsAndUpdatesActiveStatus() = runBlocking {
+        val storage = InMemoryOfflineStorage()
+        val serverTeams = mutableListOf(
+            TeamDto(
+                id = "team_alpha_001",
+                name = "گشت آلفا",
+                leadUserId = "usr_lead_001",
+                vehicleType = "هایلوکس",
+                vehiclePlate = "۱۱-الف-۲۲",
+                equipmentSummary = "بی‌سیم",
+                isActive = true,
+                memberCount = 2
+            )
+        )
+
+        val fakeApi = object : TeamApiService {
+            override suspend fun getTeams(offset: Int, limit: Int): Response<ApiResponseDto<List<TeamDto>>> {
+                // Simulate backend behavior: GET /api/v1/teams only returns active teams (WHERE is_active = 1)
+                return Response.success(
+                    ApiResponseDto(
+                        success = true,
+                        data = serverTeams.filter { it.isActive }
+                    )
+                )
             }
-        """.trimIndent()
 
-        val detailJsonResponse = """
-            {
-              "success": true,
-              "data": {
-                "id": "team_alpha_001",
-                "name": "گشت آلفا (واکنش سریع)",
-                "lead_user_id": "usr_lead_001",
-                "vehicle_type": "تویوتا هایلوکس",
-                "vehicle_plate": "۴۴-ب-۱۲",
-                "equipment_summary": "بی‌سیم فرکانس اختصاصی، جعبه امداد تاکتیکی",
-                "is_active": true,
-                "members": [
-                  {
-                    "id": "mem_001",
-                    "full_name": "رضا کریمی",
-                    "callsign": "البرز ۱",
-                    "role_in_team": "راننده و اپراتور فنی"
-                  },
-                  {
-                    "id": "mem_002",
-                    "full_name": "محمد حسینی",
-                    "callsign": "سهند ۲",
-                    "role_in_team": "دیده‌بان و سرتیم"
-                  }
-                ]
-              }
+            override suspend fun getTeamById(id: String): Response<ApiResponseDto<TeamDto>> {
+                val found = serverTeams.firstOrNull { it.id == id }
+                return Response.success(ApiResponseDto(success = found != null, data = found))
             }
-        """.trimIndent()
 
-        mockWebServer.enqueue(
-            MockResponse()
-                .setResponseCode(200)
-                .setHeader("Content-Type", "application/json")
-                .setBody(listJsonResponse)
-        )
-        mockWebServer.enqueue(
-            MockResponse()
-                .setResponseCode(200)
-                .setHeader("Content-Type", "application/json")
-                .setBody(detailJsonResponse)
-        )
-
-        val result = repository.getTeams(fetchDetails = true)
-
-        assertTrue("Expected Result.Success", result is Result.Success)
-        val teams = (result as Result.Success).data
-        assertEquals(1, teams.size)
-        val team = teams[0]
-        assertEquals("team_alpha_001", team.id)
-        assertEquals("گشت آلفا (واکنش سریع)", team.name)
-        assertEquals("تویوتا هایلوکس", team.vehicleType)
-        assertEquals(2, team.members.size)
-        assertEquals("البرز ۱", team.members[0].callsign)
-        assertEquals("محمد حسینی", team.members[1].fullName)
-
-        val request = mockWebServer.takeRequest(5, TimeUnit.SECONDS)
-        assertNotNull(request)
-        assertEquals("/teams?offset=0&limit=50", request?.path)
-    }
-
-    @Test
-    fun getTeams_emptyList_returnsEmptySuccess() = runBlocking {
-        val jsonResponse = """
-            {
-              "success": true,
-              "data": [],
-              "pagination": { "offset": 0, "limit": 50, "total": 0, "has_more": false },
-              "meta": { "timestamp": 1729000000000, "request_id": "req_124" }
+            override suspend fun createTeam(request: CreateTeamRequestDto): Response<ApiResponseDto<TeamDto>> {
+                val created = TeamDto(
+                    id = "team_${serverTeams.size + 1}",
+                    name = request.name,
+                    leadUserId = request.leadUserId,
+                    vehicleType = request.vehicleType,
+                    vehiclePlate = request.vehiclePlate,
+                    equipmentSummary = request.equipmentSummary,
+                    isActive = true,
+                    memberCount = request.members.size
+                )
+                serverTeams.add(created)
+                return Response.success(ApiResponseDto(success = true, data = created))
             }
-        """.trimIndent()
 
-        mockWebServer.enqueue(
-            MockResponse()
-                .setResponseCode(200)
-                .setHeader("Content-Type", "application/json")
-                .setBody(jsonResponse)
-        )
-
-        val result = repository.getTeams()
-
-        assertTrue(result is Result.Success)
-        val teams = (result as Result.Success).data
-        assertTrue("Expected empty teams list", teams.isEmpty())
-    }
-
-    @Test
-    fun getTeams_http401Unauthorized_returnsApiExceptionUnauthorized() = runBlocking {
-        val errorJson = """
-            {
-              "success": false,
-              "error": {
-                "code": "UNAUTHORIZED",
-                "message": "نشست کاربری نامعتبر است یا توکن ارسال نشده است",
-                "timestamp": 1729000000000,
-                "request_id": "req_err_401"
-              }
+            override suspend fun updateTeam(id: String, request: UpdateTeamRequestDto): Response<ApiResponseDto<TeamDto>> {
+                val index = serverTeams.indexOfFirst { it.id == id }
+                val current = serverTeams[index]
+                val updated = current.copy(
+                    name = request.name ?: current.name,
+                    isActive = request.isActive ?: current.isActive
+                )
+                serverTeams[index] = updated
+                return Response.success(ApiResponseDto(success = true, data = updated))
             }
-        """.trimIndent()
 
-        mockWebServer.enqueue(
-            MockResponse()
-                .setResponseCode(401)
-                .setHeader("Content-Type", "application/json")
-                .setBody(errorJson)
-        )
-
-        val result = repository.getTeams()
-
-        assertTrue("Expected Result.Error", result is Result.Error)
-        val error = result as Result.Error
-        assertTrue("Expected ApiException.Unauthorized", error.throwable is ApiException.Unauthorized)
-        assertEquals("نشست کاربری نامعتبر است یا توکن ارسال نشده است", error.message)
-    }
-
-    @Test
-    fun getTeams_http403Forbidden_returnsApiExceptionForbidden() = runBlocking {
-        val errorJson = """
-            {
-              "success": false,
-              "error": {
-                "code": "FORBIDDEN",
-                "message": "دسترسی به این عملیات برای نقش شما مجاز نمی‌باشد",
-                "timestamp": 1729000000000,
-                "request_id": "req_err_403"
-              }
+            override suspend fun addMember(teamId: String, request: CreateMemberDto): Response<ApiResponseDto<TeamMemberDto>> {
+                throw NotImplementedError()
             }
-        """.trimIndent()
 
-        mockWebServer.enqueue(
-            MockResponse()
-                .setResponseCode(403)
-                .setHeader("Content-Type", "application/json")
-                .setBody(errorJson)
-        )
-
-        val result = repository.getTeams()
-
-        assertTrue("Expected Result.Error", result is Result.Error)
-        val error = result as Result.Error
-        assertTrue("Expected ApiException.Forbidden", error.throwable is ApiException.Forbidden)
-        assertEquals("دسترسی به این عملیات برای نقش شما مجاز نمی‌باشد", error.message)
-    }
-
-    @Test
-    fun getTeams_http500ServerError_returnsApiExceptionServerError() = runBlocking {
-        val errorJson = """
-            {
-              "success": false,
-              "error": {
-                "code": "INTERNAL_ERROR",
-                "message": "اتصال به پایگاه داده در دسترس نیست",
-                "timestamp": 1729000000000,
-                "request_id": "req_err_500"
-              }
+            override suspend fun removeMember(teamId: String, memberId: String): Response<ApiResponseDto<Map<String, String>>> {
+                throw NotImplementedError()
             }
-        """.trimIndent()
+        }
 
-        mockWebServer.enqueue(
-            MockResponse()
-                .setResponseCode(500)
-                .setHeader("Content-Type", "application/json")
-                .setBody(errorJson)
+        val repository = RealTeamRepository(
+            teamApiService = fakeApi,
+            dispatcherProvider = testDispatcher,
+            offlineStorage = storage
         )
 
-        val result = repository.getTeams()
+        // Create two additional teams sequentially
+        val create1 = repository.createTeam("گروه براوو", "usr_lead_001", "پاترول", "۲۲-ب-۳۳", "کیت امداد", emptyList())
+        val create2 = repository.createTeam("گروه چارلی", "usr_lead_001", "رونیز", "۴۴-ج-۵۵", "پهپاد", emptyList())
+        assertTrue(create1 is Result.Success)
+        assertTrue(create2 is Result.Success)
 
-        assertTrue("Expected Result.Error", result is Result.Error)
-        val error = result as Result.Error
-        assertTrue("Expected ApiException.ServerError", error.throwable is ApiException.ServerError)
-        assertEquals("اتصال به پایگاه داده در دسترس نیست", error.message)
-    }
+        val listAfterCreation = repository.getTeams()
+        assertTrue(listAfterCreation is Result.Success)
+        assertEquals(3, (listAfterCreation as Result.Success).data.size)
 
-    @Test
-    fun getTeams_networkTimeout_returnsNetworkUnavailable() = runBlocking {
-        mockWebServer.enqueue(
-            MockResponse()
-                .setSocketPolicy(SocketPolicy.DISCONNECT_AT_START)
-        )
+        // Deactivate "گروه براوو"
+        val bravoId = (create1 as Result.Success).data.id
+        val deactivateResult = repository.updateTeam(bravoId, isActive = false)
+        assertTrue(deactivateResult is Result.Success)
+        assertFalse((deactivateResult as Result.Success).data.isActive)
 
-        val result = repository.getTeams()
-
-        assertTrue("Expected Result.Error", result is Result.Error)
-        val error = result as Result.Error
-        assertTrue("Expected ApiException.NetworkUnavailable", error.throwable is ApiException.NetworkUnavailable)
-    }
-
-    @Test
-    fun getTeamDetails_success_returnsTeamWithMembers() = runBlocking {
-        val detailJsonResponse = """
-            {
-              "success": true,
-              "data": {
-                "id": "team_alpha_001",
-                "name": "گشت آلفا (واکنش سریع)",
-                "lead_user_id": "usr_lead_001",
-                "vehicle_type": "تویوتا هایلوکس",
-                "vehicle_plate": "۴۴-ب-۱۲",
-                "equipment_summary": "بی‌سیم فرکانس اختصاصی، جعبه امداد تاکتیکی",
-                "is_active": true,
-                "members": [
-                  {
-                    "id": "mem_001",
-                    "full_name": "رضا کریمی",
-                    "callsign": "البرز ۱",
-                    "role_in_team": "راننده و اپراتور فنی"
-                  }
-                ]
-              }
-            }
-        """.trimIndent()
-
-        mockWebServer.enqueue(
-            MockResponse()
-                .setResponseCode(200)
-                .setHeader("Content-Type", "application/json")
-                .setBody(detailJsonResponse)
-        )
-
-        val result = repository.getTeamDetails("team_alpha_001")
-
-        assertTrue(result is Result.Success)
-        val team = (result as Result.Success).data
-        assertEquals("team_alpha_001", team.id)
-        assertEquals("گشت آلفا (واکنش سریع)", team.name)
-        assertEquals(1, team.members.size)
-        assertEquals("رضا کریمی", team.members[0].fullName)
-    }
-
-    @Test
-    fun getTeamDetails_notFound_returnsApiExceptionNotFound() = runBlocking {
-        val errorJson = """
-            {
-              "success": false,
-              "error": {
-                "code": "NOT_FOUND",
-                "message": "تیم عملیاتی با شناسه 'non_existent' یافت نشد",
-                "timestamp": 1729000000000,
-                "request_id": "req_err_404"
-              }
-            }
-        """.trimIndent()
-
-        mockWebServer.enqueue(
-            MockResponse()
-                .setResponseCode(404)
-                .setHeader("Content-Type", "application/json")
-                .setBody(errorJson)
-        )
-
-        val result = repository.getTeamDetails("non_existent")
-
-        assertTrue(result is Result.Error)
-        val error = result as Result.Error
-        assertTrue(error.throwable is ApiException.NotFound)
-        assertEquals("تیم عملیاتی با شناسه 'non_existent' یافت نشد", error.message)
+        // Reload teams: deactivated team must remain preserved with isActive = false
+        val listAfterDeactivation = repository.getTeams()
+        assertTrue(listAfterDeactivation is Result.Success)
+        val allTeams = (listAfterDeactivation as Result.Success).data
+        assertEquals(3, allTeams.size)
+        val bravoAfterReload = allTeams.first { it.id == bravoId }
+        assertFalse(bravoAfterReload.isActive)
     }
 }

@@ -19,7 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ir.alifaniani.waymate.ui.common.BadgeTone
@@ -37,6 +38,7 @@ import ir.alifaniani.waymate.ui.common.BannerType
 import ir.alifaniani.waymate.ui.common.TacticalFeedbackBanner
 import ir.alifaniani.waymate.ui.common.TacticalOutlinedButton
 import ir.alifaniani.waymate.ui.common.TacticalStatusBadge
+import ir.alifaniani.waymate.ui.designsystem.TacticalIcons
 
 /**
  * Persian RTL Layer and Base Map Management Sheet.
@@ -61,12 +63,12 @@ fun TacticalLayerControlSheet(
             .border(
                 width = 1.dp,
                 color = MaterialTheme.colorScheme.outlineVariant,
-                shape = RoundedCornerShape(14.dp)
+                shape = RoundedCornerShape(16.dp)
             ),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF10161D)
+            containerColor = Color(0xFF0E1520)
         ),
-        shape = RoundedCornerShape(14.dp)
+        shape = RoundedCornerShape(16.dp)
     ) {
         Column(
             modifier = Modifier
@@ -80,42 +82,52 @@ fun TacticalLayerControlSheet(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "▤",
-                        color = MaterialTheme.colorScheme.primary,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = TacticalIcons.Layers,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "مدیریت لایه‌ها و کارتوگرافی نقشه",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
+                Spacer(modifier = Modifier.width(8.dp))
+
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFF172234))
+                        .border(1.dp, Color(0xFF283548), RoundedCornerShape(10.dp))
                         .clickable { onDismiss() },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "✕",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
+                    Icon(
+                        imageVector = TacticalIcons.Close,
+                        contentDescription = "بستن مدیریت لایه‌ها",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
 
             Text(
-                text = "تنظیم نوع نقشه پایه و روشن/خاموش کردن لایه‌های اطلاعاتی وکتور",
+                text = "تنظیم نقشه پایه و مدیریت لایه‌های اطلاعاتی وکتور",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+                modifier = Modifier.padding(top = 6.dp, bottom = 12.dp)
             )
 
             HorizontalDivider(
@@ -127,7 +139,7 @@ fun TacticalLayerControlSheet(
 
             // SECTION 1: Base Map Presentation Selector
             Text(
-                text = "۱. انتخاب نقشه پایه (Base Map Presentation)",
+                text = "۱. انتخاب نقشه پایه",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = Color(0xFFE2E8F0)
@@ -155,9 +167,9 @@ fun TacticalLayerControlSheet(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .background(backgroundColor)
-                        .border(width = 1.dp, color = borderColor, shape = RoundedCornerShape(8.dp))
+                        .border(width = 1.dp, color = borderColor, shape = RoundedCornerShape(10.dp))
                         .clickable { onSelectBasePresentation(presentation) }
                         .padding(12.dp)
                 ) {
@@ -166,15 +178,24 @@ fun TacticalLayerControlSheet(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
                                 Text(
                                     text = presentation.titlePersian,
+                                    modifier = Modifier.weight(1f).padding(end = 6.dp),
                                     style = MaterialTheme.typography.bodyMedium,
+                                    fontSize = 13.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                     color = if (isSelected) Color.White else Color(0xFFCBD5E1)
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
 
                                 when {
                                     !isConfigured -> {
@@ -192,22 +213,23 @@ fun TacticalLayerControlSheet(
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(2.dp))
+                            Spacer(modifier = Modifier.height(4.dp))
 
                             Text(
                                 text = presentation.subtitlePersian,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 11.sp
+                                fontSize = 11.sp,
+                                lineHeight = 16.sp
                             )
                         }
 
                         if (isSelected) {
-                            Text(
-                                text = "✓",
-                                color = if (isConfigured) MaterialTheme.colorScheme.primary else Color(0xFFF57C00),
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold
+                            Icon(
+                                imageVector = TacticalIcons.Check,
+                                contentDescription = null,
+                                tint = if (isConfigured) MaterialTheme.colorScheme.primary else Color(0xFFF57C00),
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
@@ -241,17 +263,16 @@ fun TacticalLayerControlSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "۲. لایه‌های اطلاعاتی وکتور (Vector Overlays)",
+                    text = "۲. لایه‌های اطلاعاتی وکتور",
+                    modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = Color(0xFFE2E8F0)
                 )
 
-                Text(
+                TacticalStatusBadge(
                     text = "${uiState.activeLayerCount} از ${uiState.layers.size} فعال",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Medium
+                    tone = BadgeTone.SUCCESS
                 )
             }
 
@@ -264,34 +285,41 @@ fun TacticalLayerControlSheet(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .background(Color(0xFF151C24))
                         .border(
                             width = 1.dp,
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                            shape = RoundedCornerShape(8.dp)
+                            shape = RoundedCornerShape(10.dp)
                         )
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
                             Text(
                                 text = layer.titlePersian,
+                                modifier = Modifier.weight(1f, fill = false),
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (isAvailable) Color.White else Color(0xFF64748B)
                             )
 
                             if (layer.featureCount != null) {
-                                Spacer(modifier = Modifier.width(6.dp))
                                 TacticalStatusBadge(
                                     text = "${layer.featureCount} عارضه",
-                                    tone = if (layer.id == "jahrom_waterways") BadgeTone.NEUTRAL else BadgeTone.NEUTRAL
+                                    tone = BadgeTone.NEUTRAL
                                 )
                             } else if (!isAvailable) {
-                                Spacer(modifier = Modifier.width(6.dp))
                                 TacticalStatusBadge(
                                     text = "فاز آینده",
                                     tone = BadgeTone.NEUTRAL
@@ -299,13 +327,14 @@ fun TacticalLayerControlSheet(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(2.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
 
                         Text(
                             text = layer.descriptionPersian,
                             style = MaterialTheme.typography.bodySmall,
                             color = if (isAvailable) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF475569),
-                            fontSize = 11.sp
+                            fontSize = 11.sp,
+                            lineHeight = 16.sp
                         )
                     }
 
@@ -328,24 +357,25 @@ fun TacticalLayerControlSheet(
             // SECTION 3: Attribution & Sovereign Notice
             Card(
                 colors = CardDefaults.cardColors(containerColor = Color(0xFF0B1015)),
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(10.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(width = 1.dp, color = Color(0xFF1E293B), shape = RoundedCornerShape(8.dp))
+                    .border(width = 1.dp, color = Color(0xFF1E293B), shape = RoundedCornerShape(10.dp))
             ) {
-                Column(modifier = Modifier.padding(10.dp)) {
+                Column(modifier = Modifier.padding(12.dp)) {
                     Text(
                         text = "حقوق داده‌ها و منبع کارتوگرافی:",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF94A3B8)
                     )
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "• داده‌های وکتور معابر شهری جهرم استخراج‌شده و ممیزی‌شده (EPSG:4326)\n• نقشه‌های پایه آزاد © OpenStreetMap contributors تحت مجوز ODbL\n• موتور رندرینگ درون‌سازمانی با معماری مستقل و بدون وابستگی به APIهای تجاری",
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFF64748B),
                         fontSize = 10.sp,
-                        lineHeight = 14.sp
+                        lineHeight = 15.sp
                     )
                 }
             }
@@ -355,6 +385,7 @@ fun TacticalLayerControlSheet(
             TacticalOutlinedButton(
                 text = "بستن و بازگشت به نقشه",
                 onClick = onDismiss,
+                leadingIcon = TacticalIcons.Close,
                 modifier = Modifier.fillMaxWidth()
             )
         }

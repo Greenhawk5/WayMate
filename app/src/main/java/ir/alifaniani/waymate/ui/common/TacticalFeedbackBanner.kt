@@ -66,6 +66,12 @@ fun TacticalFeedbackBanner(
         )
     }
 
+    val tagTextColor = if (type == BannerType.INFO) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        borderColor
+    }
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -79,7 +85,7 @@ fun TacticalFeedbackBanner(
                     text = "[$tagLabel]",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
-                    color = borderColor
+                    color = tagTextColor
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(

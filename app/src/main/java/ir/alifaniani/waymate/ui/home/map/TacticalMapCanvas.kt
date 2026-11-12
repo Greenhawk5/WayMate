@@ -43,8 +43,11 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalLayoutDirection
+import ir.alifaniani.waymate.R
+import ir.alifaniani.waymate.ui.common.TacticalEmptyStateCard
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -56,7 +59,10 @@ import ir.alifaniani.waymate.domain.model.WaypointType
 import ir.alifaniani.waymate.ui.common.BadgeTone
 import ir.alifaniani.waymate.ui.common.TacticalOutlinedButton
 import ir.alifaniani.waymate.ui.common.TacticalStatusBadge
+import ir.alifaniani.waymate.ui.designsystem.RadarLoader
+import ir.alifaniani.waymate.ui.designsystem.TacticalIcons
 import kotlin.math.cos
+import kotlin.math.pow
 import kotlin.math.sin
 
 /**
@@ -81,11 +87,14 @@ fun TacticalMapCanvas(
     onZoomOut: () -> Unit,
     onCenterReset: () -> Unit,
     onRetry: () -> Unit,
+    showInternalCoordinatesHud: Boolean = true,
+    controlsBottomPadding: Dp = 10.dp,
     modifier: Modifier = Modifier
 ) {
     var panOffset by remember { mutableStateOf(Offset.Zero) }
     var userZoomScale by remember { mutableFloatStateOf(1f) }
     var userRotationDegrees by remember { mutableFloatStateOf(0f) }
+    val reusableSegmentPath = remember { Path() }
 
     val primaryColor = MaterialTheme.colorScheme.primary
     val outlineColor = MaterialTheme.colorScheme.outline
@@ -98,6 +107,10 @@ fun TacticalMapCanvas(
     val roadSecondaryColor = Color(0xFFFFC107)
     val roadLocalColor = Color(0xFF64748B)
     val waterwayColor = Color(0xFF00E5FF)
+
+    val zoomLevelMultiplier = remember(uiState.zoomLevel) {
+        1.22f.pow((uiState.zoomLevel - 14).toFloat())
+    }
 
     Box(
         modifier = modifier
@@ -113,9 +126,11 @@ fun TacticalMapCanvas(
                 .fillMaxSize()
                 .clipToBounds()
                 .pointerInput(Unit) {
-                    detectTransformGestures(panZoomLock = false) { centroid, pan, zoom, rotation ->
-                        panOffset += pan
-                        userZoomScale = (userZoomScale * zoom).coerceIn(0.4f, 3.5f)
+                    detectTransformGestures(panZoomLock = false) { _, pan, zoom, rotation ->
+                        val nextZoomScale = (userZoomScale * zoom).coerceIn(0.4f, 4.0f)
+                        val appliedZoomRatio = nextZoomScale / userZoomScale
+                        panOffset = (panOffset * appliedZoomRatio) + pan
+                        userZoomScale = nextZoomScale
                         userRotationDegrees = (userRotationDegrees + rotation) % 360f
                     }
                 }
@@ -132,7 +147,7 @@ fun TacticalMapCanvas(
                     userRotationDegrees
                 ) {
                     detectTapGestures { tapOffset ->
-                        val effectiveZoom = (uiState.zoomLevel.toFloat() / 14f) * userZoomScale
+                        val effectiveZoom = zoomLevelMultiplier * userZoomScale
                         val scale = 35000f * effectiveZoom
                         val cosLat = cos(Math.toRadians(uiState.centerLatitude)).toFloat()
 
@@ -213,7 +228,7 @@ fun TacticalMapCanvas(
             val width = size.width
             val height = size.height
             val center = Offset(width / 2f + panOffset.x, height / 2f + panOffset.y)
-            val effectiveZoom = (uiState.zoomLevel.toFloat() / 14f) * userZoomScale
+            val effectiveZoom = zoomLevelMultiplier * userZoomScale
             val scale = 35000f * effectiveZoom
             val cosLat = cos(Math.toRadians(uiState.centerLatitude)).toFloat()
 
@@ -225,7 +240,7 @@ fun TacticalMapCanvas(
                 val gridSpacing = 40.dp.toPx()
                 val gridColor = Color(0xFF1E2836)
 
-                var x = (center.x % gridSpacing)
+                var x = ((center.x % gridSpacing) + gridSpacing) % gridSpacing
                 while (x < width) {
                     drawLine(
                         color = gridColor,
@@ -236,7 +251,7 @@ fun TacticalMapCanvas(
                     x += gridSpacing
                 }
 
-                var y = (center.y % gridSpacing)
+                var y = ((center.y % gridSpacing) + gridSpacing) % gridSpacing
                 while (y < height) {
                     drawLine(
                         color = gridColor,
@@ -247,7 +262,8 @@ fun TacticalMapCanvas(
                     y += gridSpacing
                 }
 
-                // Range rings
+                // Range rings centered on visible screen center
+                val screenCenter = Offset(width / 2f, height / 2f)
                 val maxRadius = kotlin.math.min(width, height) * 0.45f
                 val ringSteps = 3
                 for (i in 1..ringSteps) {
@@ -255,7 +271,7 @@ fun TacticalMapCanvas(
                     drawCircle(
                         color = Color(0xFF1E2836),
                         radius = r,
-                        center = center,
+                        center = screenCenter,
                         style = Stroke(
                             width = 1f,
                             pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
@@ -263,18 +279,18 @@ fun TacticalMapCanvas(
                     )
                 }
 
-                // Crosshair at center
+                // Crosshair at screen center
                 val crossLength = 14.dp.toPx()
                 drawLine(
                     color = primaryColor.copy(alpha = 0.7f),
-                    start = Offset(center.x - crossLength, center.y),
-                    end = Offset(center.x + crossLength, center.y),
+                    start = Offset(screenCenter.x - crossLength, screenCenter.y),
+                    end = Offset(screenCenter.x + crossLength, screenCenter.y),
                     strokeWidth = 1.5f
                 )
                 drawLine(
                     color = primaryColor.copy(alpha = 0.7f),
-                    start = Offset(center.x, center.y - crossLength),
-                    end = Offset(center.x, center.y + crossLength),
+                    start = Offset(screenCenter.x, screenCenter.y - crossLength),
+                    end = Offset(screenCenter.x, screenCenter.y + crossLength),
                     strokeWidth = 1.5f
                 )
             }
@@ -289,28 +305,36 @@ fun TacticalMapCanvas(
                 val strokeRoadSecondary = Stroke(width = 2.0f)
                 val strokeRoadLocal = Stroke(width = 1.2f)
 
-                // Viewport bounding box in geographical degrees (with safety padding for rotation)
-                val halfLonSpan = (width / (2f * scale * cosLat)) * 1.5f
-                val halfLatSpan = (height / (2f * scale)) * 1.5f
-                val minLon = uiState.centerLongitude - halfLonSpan
-                val maxLon = uiState.centerLongitude + halfLonSpan
-                val minLat = uiState.centerLatitude - halfLatSpan
-                val maxLat = uiState.centerLatitude + halfLatSpan
+                // Compute geographical center of the current panned screen viewport
+                val viewportCenterLon = uiState.centerLongitude - (panOffset.x / (scale * cosLat)).toDouble()
+                val viewportCenterLat = uiState.centerLatitude + (panOffset.y / scale).toDouble()
+                val maxDim = kotlin.math.max(width, height)
+                val halfLonSpan = (maxDim / (2f * scale * cosLat)) * 1.65f
+                val halfLatSpan = (maxDim / (2f * scale)) * 1.65f
+                val minLon = viewportCenterLon - halfLonSpan
+                val maxLon = viewportCenterLon + halfLonSpan
+                val minLat = viewportCenterLat - halfLatSpan
+                val maxLat = viewportCenterLat + halfLatSpan
 
                 for (segment in uiState.vectorSegments) {
                     if (segment.isWaterway && !isWaterwaysEnabled) continue
                     if (!segment.isWaterway && !isRoadsEnabled) continue
 
                     if (segment.points.size >= 2) {
-                        // Quick viewport culling: skip segments completely outside visible bounds
-                        var inViewport = false
+                        // Bounding-box intersection culling so zoomed-in long segments never vanish
+                        var segMinLon = Double.POSITIVE_INFINITY
+                        var segMaxLon = Double.NEGATIVE_INFINITY
+                        var segMinLat = Double.POSITIVE_INFINITY
+                        var segMaxLat = Double.NEGATIVE_INFINITY
                         for (pt in segment.points) {
-                            if (pt.longitude in minLon..maxLon && pt.latitude in minLat..maxLat) {
-                                inViewport = true
-                                break
-                            }
+                            if (pt.longitude < segMinLon) segMinLon = pt.longitude
+                            if (pt.longitude > segMaxLon) segMaxLon = pt.longitude
+                            if (pt.latitude < segMinLat) segMinLat = pt.latitude
+                            if (pt.latitude > segMaxLat) segMaxLat = pt.latitude
                         }
-                        if (!inViewport) continue
+                        val intersectsViewport = segMaxLon >= minLon && segMinLon <= maxLon &&
+                            segMaxLat >= minLat && segMinLat <= maxLat
+                        if (!intersectsViewport) continue
 
                         val strokeColor = when {
                             segment.isWaterway -> waterwayColor
@@ -326,21 +350,21 @@ fun TacticalMapCanvas(
                             else -> strokeRoadLocal
                         }
 
-                        val path = Path()
+                        reusableSegmentPath.reset()
                         val p0 = segment.points[0]
                         val x0 = center.x + ((p0.longitude - uiState.centerLongitude).toFloat() * scale * cosLat)
                         val y0 = center.y - ((p0.latitude - uiState.centerLatitude).toFloat() * scale)
-                        path.moveTo(x0, y0)
+                        reusableSegmentPath.moveTo(x0, y0)
 
                         for (i in 1 until segment.points.size) {
                             val pt = segment.points[i]
                             val px = center.x + ((pt.longitude - uiState.centerLongitude).toFloat() * scale * cosLat)
                             val py = center.y - ((pt.latitude - uiState.centerLatitude).toFloat() * scale)
-                            path.lineTo(px, py)
+                            reusableSegmentPath.lineTo(px, py)
                         }
 
                         drawPath(
-                            path = path,
+                            path = reusableSegmentPath,
                             color = strokeColor.copy(alpha = if (segment.isWaterway) 0.85f else 0.75f),
                             style = strokeStyle
                         )
@@ -688,24 +712,24 @@ fun TacticalMapCanvas(
             }
         }
 
-        // Loading overlay
+        // Loading overlay (Radar Loader)
         if (uiState.isLoading) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xCC0D1218)),
+                    .background(Color(0xD90A0E17)),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(
+                    RadarLoader(
                         color = primaryColor,
-                        modifier = Modifier.size(36.dp),
-                        strokeWidth = 3.dp
+                        size = 54.dp
                     )
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     Text(
                         text = "در حال بارگذاری عوارض وکتور جهرم...",
                         style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium,
                         color = Color(0xFFE2E8F0)
                     )
                 }
@@ -721,55 +745,42 @@ fun TacticalMapCanvas(
                     .padding(16.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = "خطا در پردازش نقشه",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFFEF5350)
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = uiState.errorMessage,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFFCBD5E1)
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    TacticalOutlinedButton(
-                        text = "بازنشانی به حالت پایه",
-                        onClick = onRetry
-                    )
-                }
+                TacticalEmptyStateCard(
+                    illustrationResId = R.drawable.img_empty_map_not_downloaded,
+                    title = "خطا در پردازش نقشه جهرم",
+                    description = uiState.errorMessage ?: "عوارض وکتور جهرم در دسترس نیستند.",
+                    actionText = "بازنشانی به حالت پایه",
+                    onActionClicked = onRetry
+                )
             }
         }
 
         // Map HUD: Top Coordinate & Mode Bar (Enforce LTR for coordinate display)
-        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-            Row(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(10.dp)
-                    .background(Color(0xCC151B22), shape = RoundedCornerShape(6.dp))
-                    .border(1.dp, Color(0xFF30363D), shape = RoundedCornerShape(6.dp))
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = uiState.formattedCoordinates,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFFE6EDF3),
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Medium
-                )
-                Spacer(modifier = Modifier.size(6.dp))
-                Box(
+        if (showInternalCoordinatesHud) {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                Row(
                     modifier = Modifier
-                        .size(6.dp)
-                        .background(successColor, shape = CircleShape)
-                )
+                        .align(Alignment.TopStart)
+                        .padding(10.dp)
+                        .background(Color(0xCC151B22), shape = RoundedCornerShape(8.dp))
+                        .border(1.dp, Color(0xFF30363D), shape = RoundedCornerShape(8.dp))
+                        .padding(horizontal = 8.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = uiState.formattedCoordinates,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFFE6EDF3),
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.size(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(successColor, shape = CircleShape)
+                    )
+                }
             }
         }
 
@@ -777,62 +788,86 @@ fun TacticalMapCanvas(
         Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+                .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = controlsBottomPadding),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(32.dp)
-                    .background(Color(0xEE151B22), shape = RoundedCornerShape(6.dp))
-                .border(1.dp, Color(0xFF30363D), shape = RoundedCornerShape(6.dp))
-                .clickable { onZoomIn() },
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xEE111927), shape = RoundedCornerShape(10.dp))
+                    .border(1.dp, Color(0xFF283548), shape = RoundedCornerShape(10.dp))
+                    .clickable {
+                        if (uiState.zoomLevel < 18) {
+                            panOffset *= 1.22f
+                            onZoomIn()
+                        } else {
+                            val nextScale = (userZoomScale * 1.22f).coerceAtMost(4.0f)
+                            panOffset *= (nextScale / userZoomScale)
+                            userZoomScale = nextScale
+                        }
+                    },
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "+",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
+                Icon(
+                    imageVector = TacticalIcons.Plus,
+                    contentDescription = "بزرگ‌نمایی نقشه",
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
                 )
             }
 
             Box(
                 modifier = Modifier
-                    .size(32.dp)
-                    .background(Color(0xEE151B22), shape = RoundedCornerShape(6.dp))
-                    .border(1.dp, Color(0xFF30363D), shape = RoundedCornerShape(6.dp))
-                    .clickable { onZoomOut() },
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xEE111927), shape = RoundedCornerShape(10.dp))
+                    .border(1.dp, Color(0xFF283548), shape = RoundedCornerShape(10.dp))
+                    .clickable {
+                        if (uiState.zoomLevel > 10) {
+                            panOffset /= 1.22f
+                            onZoomOut()
+                        } else {
+                            val nextScale = (userZoomScale / 1.22f).coerceAtLeast(0.4f)
+                            panOffset *= (nextScale / userZoomScale)
+                            userZoomScale = nextScale
+                        }
+                    },
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "−",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
+                Icon(
+                    imageVector = TacticalIcons.Minus,
+                    contentDescription = "کوچک‌نمایی نقشه",
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
                 )
             }
 
             if (kotlin.math.abs(userRotationDegrees) > 1f) {
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
-                        .background(Color(0xEE151B22), shape = RoundedCornerShape(6.dp))
-                        .border(1.dp, primaryColor, shape = RoundedCornerShape(6.dp))
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xEE111927), shape = RoundedCornerShape(10.dp))
+                        .border(1.dp, primaryColor, shape = RoundedCornerShape(10.dp))
                         .clickable { userRotationDegrees = 0f },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "🧭",
-                        fontSize = 14.sp
+                    Icon(
+                        imageVector = TacticalIcons.Compass,
+                        contentDescription = "تنظیم شمال نقشه",
+                        tint = primaryColor,
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
 
             Box(
                 modifier = Modifier
-                    .size(32.dp)
-                    .background(Color(0xEE151B22), shape = RoundedCornerShape(6.dp))
-                    .border(1.dp, Color(0xFF30363D), shape = RoundedCornerShape(6.dp))
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xEE111927), shape = RoundedCornerShape(10.dp))
+                    .border(1.dp, primaryColor.copy(alpha = 0.55f), shape = RoundedCornerShape(10.dp))
                     .clickable {
                         panOffset = Offset.Zero
                         userZoomScale = 1f
@@ -841,11 +876,11 @@ fun TacticalMapCanvas(
                     },
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "⌖",
-                    color = primaryColor,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
+                Icon(
+                    imageVector = TacticalIcons.Crosshair,
+                    contentDescription = "بازگشت به مرکز جهرم",
+                    tint = primaryColor,
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }
@@ -855,11 +890,11 @@ fun TacticalMapCanvas(
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
+                    .padding(start = 12.dp, end = 64.dp, top = 10.dp, bottom = controlsBottomPadding)
+                    .fillMaxWidth()
+                    .background(Color(0xF2111927), shape = RoundedCornerShape(12.dp))
+                    .border(1.dp, primaryColor, shape = RoundedCornerShape(12.dp))
                     .padding(10.dp)
-                    .fillMaxWidth(0.75f)
-                    .background(Color(0xEE151B22), shape = RoundedCornerShape(8.dp))
-                    .border(1.dp, primaryColor, shape = RoundedCornerShape(8.dp))
-                    .padding(8.dp)
             ) {
                 Column {
                     Row(
@@ -869,6 +904,7 @@ fun TacticalMapCanvas(
                     ) {
                         Text(
                             text = marker.callsign,
+                            modifier = Modifier.weight(1f).padding(end = 8.dp),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -878,11 +914,11 @@ fun TacticalMapCanvas(
                             tone = marker.tone
                         )
                     }
-                    Spacer(modifier = Modifier.height(2.dp))
+                    Spacer(modifier = Modifier.height(3.dp))
                     Text(
                         text = marker.unitDescription,
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF8B949E),
+                        color = Color(0xFF94A3B8),
                         fontSize = 11.sp
                     )
                 }
@@ -895,11 +931,11 @@ fun TacticalMapCanvas(
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
+                    .padding(start = 12.dp, end = 64.dp, top = 10.dp, bottom = controlsBottomPadding)
+                    .fillMaxWidth()
+                    .background(Color(0xF2111927), shape = RoundedCornerShape(12.dp))
+                    .border(1.dp, if (isStale) warningColor else Color(0xFF00E676), shape = RoundedCornerShape(12.dp))
                     .padding(10.dp)
-                    .fillMaxWidth(0.75f)
-                    .background(Color(0xEE151B22), shape = RoundedCornerShape(8.dp))
-                    .border(1.dp, if (isStale) warningColor else Color(0xFF00E676), shape = RoundedCornerShape(8.dp))
-                    .padding(8.dp)
             ) {
                 Column {
                     Row(
@@ -909,12 +945,13 @@ fun TacticalMapCanvas(
                     ) {
                         Text(
                             text = member.callsign,
+                            modifier = Modifier.weight(1f).padding(end = 8.dp),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
                         TacticalStatusBadge(
-                            text = if (isStale) "قدیمی (Stale)" else "موقعیت زنده",
+                            text = if (isStale) "قدیمی" else "موقعیت زنده",
                             tone = if (isStale) BadgeTone.WARNING else BadgeTone.SUCCESS
                         )
                     }
@@ -934,7 +971,7 @@ fun TacticalMapCanvas(
                         Text(
                             text = listOf(speedText, altText).filter { it.isNotBlank() }.joinToString(" • "),
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF8B949E),
+                            color = Color(0xFF94A3B8),
                             fontSize = 10.sp
                         )
                     }

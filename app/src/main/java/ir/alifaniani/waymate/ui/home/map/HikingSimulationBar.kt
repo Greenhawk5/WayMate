@@ -3,6 +3,7 @@ package ir.alifaniani.waymate.ui.home.map
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,9 +14,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ir.alifaniani.waymate.domain.model.HikingDifficulty
@@ -36,6 +41,7 @@ import ir.alifaniani.waymate.ui.common.BannerType
 import ir.alifaniani.waymate.ui.common.TacticalFeedbackBanner
 import ir.alifaniani.waymate.ui.common.TacticalOutlinedButton
 import ir.alifaniani.waymate.ui.common.TacticalStatusBadge
+import ir.alifaniani.waymate.ui.designsystem.TacticalIcons
 
 /**
  * Control panel for deterministic hiking route simulation.
@@ -60,12 +66,12 @@ fun HikingSimulationBar(
             .border(
                 width = 1.dp,
                 color = Color(0xFF00E5FF).copy(alpha = 0.5f),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(14.dp)
             ),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF151B22)
+            containerColor = Color(0xF5111927)
         ),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(14.dp)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             // Header Row
@@ -74,10 +80,13 @@ fun HikingSimulationBar(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Box(
                         modifier = Modifier
-                            .size(10.dp)
+                            .size(9.dp)
                             .clip(RoundedCornerShape(5.dp))
                             .background(if (simulationState.isPlaying) Color(0xFF00E5FF) else Color(0xFFFF9100))
                     )
@@ -86,25 +95,36 @@ fun HikingSimulationBar(
                         text = "شبیه‌ساز پیمایش مسیر کوهنوردی",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
+
+                Spacer(modifier = Modifier.width(8.dp))
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TacticalStatusBadge(
                         text = if (simulationState.isFinished) "پایان مسیر" else if (simulationState.isPlaying) "در حال پیمایش" else "متوقف",
                         tone = if (simulationState.isPlaying) BadgeTone.SUCCESS else BadgeTone.NEUTRAL
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "✕",
-                        color = Color(0xFF8B949E),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Box(
                         modifier = Modifier
-                            .clickable { onDismiss() }
-                            .padding(4.dp)
-                    )
+                            .size(32.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF1A2536))
+                            .border(1.dp, Color(0xFF283548), RoundedCornerShape(8.dp))
+                            .clickable { onDismiss() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = TacticalIcons.Close,
+                            contentDescription = "بستن شبیه‌ساز",
+                            tint = Color(0xFF94A3B8),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
             }
 
@@ -112,8 +132,8 @@ fun HikingSimulationBar(
 
             // Synthetic Location Notice
             TacticalFeedbackBanner(
-                title = "حالت موقعیت‌یابی مجازی (Synthetic Simulation)",
-                message = "این قابلیت صرفاً برای ارزیابی رابط کاربری و عملکرد نقشه طراحی شده است. هیچ داده مکانی یا حسگر واقعی به شبکه ارسال نمی‌شود.",
+                title = "حالت موقعیت‌یابی مجازی",
+                message = "این قابلیت صرفاً برای ارزیابی رابط کاربری و عملکرد نقشه طراحی شده است و هیچ داده مکانی واقعی ارسال نمی‌شود.",
                 type = BannerType.INFO
             )
 
@@ -123,32 +143,35 @@ fun HikingSimulationBar(
             Text(
                 text = "انتخاب مسیر کوه‌پیمایی:",
                 style = MaterialTheme.typography.labelSmall,
-                color = Color(0xFF8B949E)
+                color = Color(0xFF94A3B8)
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 availableRoutes.forEach { route ->
                     val isSelected = route.id == simulationState.route.id
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(if (isSelected) Color(0xFF1E3A5F) else Color(0xFF21262D))
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isSelected) Color(0xFF1E3A5F) else Color(0xFF182232))
                             .border(
                                 1.dp,
-                                if (isSelected) Color(0xFF00E5FF) else Color(0xFF30363D),
-                                RoundedCornerShape(6.dp)
+                                if (isSelected) Color(0xFF00E5FF) else Color(0xFF283548),
+                                RoundedCornerShape(8.dp)
                             )
                             .clickable { onSelectRoute(route) }
-                            .padding(horizontal = 8.dp, vertical = 5.dp)
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
                     ) {
                         Text(
                             text = route.name,
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (isSelected) Color(0xFF00E5FF) else Color(0xFFC9D1D9),
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            color = if (isSelected) Color(0xFF00E5FF) else Color(0xFFCBD5E1),
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            maxLines = 1
                         )
                     }
                 }
@@ -156,7 +179,7 @@ fun HikingSimulationBar(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Route Info & Stats
+            // Route Info & Difficulty Badge (weighted so difficulty badge never clips)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -164,9 +187,14 @@ fun HikingSimulationBar(
             ) {
                 Text(
                     text = "${simulationState.route.name} • ${simulationState.route.lengthKm} ک‌م • شیب +${simulationState.route.elevationGainMeters}م",
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp),
                     style = MaterialTheme.typography.bodySmall,
                     color = Color(0xFFE6EDF3),
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
                 TacticalStatusBadge(
                     text = simulationState.route.difficulty.displayNamePersian,
@@ -191,30 +219,49 @@ fun HikingSimulationBar(
                 trackColor = Color(0xFF21262D)
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Telemetry & Waypoint Info
+            // Telemetry & Waypoint Info (Separated cleanly so texts never overlap)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = simulationState.formattedProgress,
+                    text = "پیمایش: ${simulationState.formattedProgress}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFF8B949E),
-                    fontFamily = FontFamily.Monospace
+                    color = Color(0xFFCBD5E1),
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1
                 )
                 Text(
                     text = "سمت: ${simulationState.currentBearing.toInt()}°",
                     style = MaterialTheme.typography.labelSmall,
                     color = Color(0xFF00E5FF),
-                    fontFamily = FontFamily.Monospace
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1
                 )
-                simulationState.nextWaypoint?.let { wp ->
+            }
+
+            simulationState.nextWaypoint?.let { wp ->
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Icon(
+                        imageVector = TacticalIcons.Location,
+                        contentDescription = null,
+                        tint = Color(0xFFFFB74D),
+                        modifier = Modifier.size(13.dp)
+                    )
                     Text(
                         text = "ایستگاه بعد: ${wp.title}",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFFFFB74D)
+                        color = Color(0xFFFFB74D),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -229,42 +276,61 @@ fun HikingSimulationBar(
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TacticalOutlinedButton(
-                        text = if (simulationState.isPlaying) "توقف (⏸)" else if (simulationState.isFinished) "تکرار (↺)" else "حرکت (▶)",
-                        onClick = onTogglePlayPause
+                        text = if (simulationState.isPlaying) "توقف" else if (simulationState.isFinished) "تکرار" else "حرکت",
+                        leadingIcon = if (simulationState.isPlaying) {
+                            TacticalIcons.Pause
+                        } else if (simulationState.isFinished) {
+                            TacticalIcons.Replay
+                        } else {
+                            TacticalIcons.Play
+                        },
+                        onClick = onTogglePlayPause,
+                        modifier = Modifier.wrapContentWidth()
                     )
 
                     TacticalOutlinedButton(
-                        text = "مبدا (↺)",
-                        onClick = onReset
+                        text = "مبدا",
+                        leadingIcon = TacticalIcons.Replay,
+                        onClick = onReset,
+                        modifier = Modifier.wrapContentWidth()
                     )
                 }
 
                 // Speed Multiplier Chips
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = "سرعت:",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF8B949E),
-                        fontSize = 11.sp
+                        color = Color(0xFF94A3B8),
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        softWrap = false
                     )
                     listOf(1.0f, 2.0f, 5.0f).forEach { speed ->
                         val isSelected = simulationState.speedMultiplier == speed
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(if (isSelected) Color(0xFF00E5FF) else Color(0xFF21262D))
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (isSelected) Color(0xFF00E5FF) else Color(0xFF1E293B))
+                                .border(
+                                    1.dp,
+                                    if (isSelected) Color(0xFF00E5FF) else Color(0xFF334155),
+                                    RoundedCornerShape(6.dp)
+                                )
                                 .clickable { onSetSpeedMultiplier(speed) }
-                                .padding(horizontal = 6.dp, vertical = 3.dp)
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text(
                                 text = "${speed.toInt()}x",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = if (isSelected) Color.Black else Color(0xFFC9D1D9),
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                fontSize = 11.sp
+                                color = if (isSelected) Color(0xFF0A101D) else Color(0xFFE2E8F0),
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }

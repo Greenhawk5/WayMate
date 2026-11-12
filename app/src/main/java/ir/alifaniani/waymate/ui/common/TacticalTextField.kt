@@ -3,9 +3,11 @@ package ir.alifaniani.waymate.ui.common
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -23,6 +25,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
+import ir.alifaniani.waymate.ui.designsystem.TacticalIcons
 
 /**
  * Tactical text input field featuring:
@@ -68,10 +71,11 @@ fun TacticalTextField(
             trailingIcon = if (isPassword) {
                 {
                     IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                        Text(
-                            text = if (passwordVisible) "پنهان" else "نمایش",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
+                        Icon(
+                            imageVector = if (passwordVisible) TacticalIcons.EyeOff else TacticalIcons.Eye,
+                            contentDescription = if (passwordVisible) "پنهان کردن رمز عبور" else "نمایش رمز عبور",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }

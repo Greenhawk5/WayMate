@@ -1,6 +1,7 @@
 package ir.alifaniani.waymate.data.network
 
 import ir.alifaniani.waymate.data.session.SessionStorage
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -17,11 +18,13 @@ class NetworkClient(
     private val baseUrlProvider: () -> String = { ApiConfig.getBaseUrl() }
 ) {
 
+    @OptIn(ExperimentalSerializationApi::class)
     val json: Json = Json {
         ignoreUnknownKeys = true
         isLenient = true
         coerceInputValues = true
         encodeDefaults = true
+        explicitNulls = false
     }
 
     val okHttpClient: OkHttpClient by lazy {
@@ -78,6 +81,7 @@ class NetworkClient(
 
 
     companion object {
+        @OptIn(ExperimentalSerializationApi::class)
         fun createCustomClient(
             baseUrl: String,
             sessionStorage: SessionStorage,
@@ -88,6 +92,7 @@ class NetworkClient(
                 isLenient = true
                 coerceInputValues = true
                 encodeDefaults = true
+                explicitNulls = false
             }
             val client = customOkHttpClient ?: OkHttpClient.Builder()
                 .connectTimeout(10, TimeUnit.SECONDS)

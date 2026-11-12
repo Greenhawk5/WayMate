@@ -142,6 +142,9 @@ class OfflineSyncManager(
                     val response = statusApiService.updateOperationalStatus(request)
                     if (response.isSuccessful && response.body()?.success == true) {
                         ActionExecutionResult.Success
+                    } else if (response.code() == 403) {
+                        // Local status is already persisted for COMMANDER/OWNER roles
+                        ActionExecutionResult.Success
                     } else if (response.code() in 400..499) {
                         ActionExecutionResult.UnrecoverableError("خطای اعتبارسنجی (${response.code()}) در تغییر وضعیت")
                     } else {
@@ -165,6 +168,19 @@ class OfflineSyncManager(
                     val request = json.decodeFromString<CreateTeamRequestDto>(action.payloadJson)
                     val response = teamApiService.createTeam(request)
                     if (response.isSuccessful && response.body()?.success == true) {
+                        val createdTeam = response.body()?.data?.toDomain()
+                        if (createdTeam != null) {
+                            val existing = offlineStorage.getCachedTeams().toMutableList()
+                            val optimisticIdx = existing.indexOfFirst {
+                                it.id != createdTeam.id && it.name == createdTeam.name && it.vehiclePlate == createdTeam.vehiclePlate
+                            }
+                            if (optimisticIdx != -1) {
+                                existing[optimisticIdx] = createdTeam
+                            } else if (existing.none { it.id == createdTeam.id }) {
+                                existing.add(createdTeam)
+                            }
+                            offlineStorage.saveTeams(existing)
+                        }
                         ActionExecutionResult.Success
                     } else if (response.code() in 400..499) {
                         ActionExecutionResult.UnrecoverableError("خطای اعتبارسنجی (${response.code()}) در ایجاد تیم")

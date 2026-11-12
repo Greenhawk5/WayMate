@@ -11,7 +11,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 
 /**
- * Tactical color extensions for status feedback (Online, Warning, Alert).
+ * Tactical color extensions for operational status (Online, Warning, Alert, Info).
  */
 @Immutable
 data class TacticalStatusColors(
@@ -24,7 +24,10 @@ data class TacticalStatusColors(
     val error: Color = TacticalError,
     val onError: Color = TacticalOnError,
     val errorContainer: Color = TacticalErrorContainer,
-    val onErrorContainer: Color = TacticalOnErrorContainer
+    val onErrorContainer: Color = TacticalOnErrorContainer,
+    val cyanAccent: Color = WayMateCyan,
+    val turquoiseAccent: Color = WayMateTurquoise,
+    val electricBlue: Color = WayMateElectricBlue
 )
 
 val LocalTacticalStatusColors = staticCompositionLocalOf { TacticalStatusColors() }
@@ -39,6 +42,9 @@ private val TacticalDarkColorScheme = darkColorScheme(
     onSecondary = TacticalOnSecondary,
     secondaryContainer = TacticalSecondaryContainer,
     onSecondaryContainer = TacticalOnSecondaryContainer,
+
+    tertiary = WayMateTurquoise,
+    onTertiary = WayMateMidnightDark,
 
     background = TacticalBackground,
     onBackground = TacticalOnBackground,

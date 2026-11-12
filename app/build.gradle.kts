@@ -25,8 +25,8 @@ android {
         applicationId = "ir.alifaniani.waymate"
         minSdk = 26
         targetSdk = 37
-        versionCode = 2
-        versionName = "0.14.0-beta.1"
+        versionCode = 3
+        versionName = "0.15.0-beta.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "DEFAULT_BASE_URL", "\"https://waymate-backend.hawkroid.workers.dev/api/v1/\"")

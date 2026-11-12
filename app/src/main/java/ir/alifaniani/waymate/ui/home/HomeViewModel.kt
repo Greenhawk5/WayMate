@@ -17,6 +17,7 @@ import ir.alifaniani.waymate.domain.model.PointCategory
 import ir.alifaniani.waymate.domain.model.PointOfInterest
 import ir.alifaniani.waymate.domain.model.TacticalMessage
 import ir.alifaniani.waymate.domain.model.Team
+import ir.alifaniani.waymate.domain.model.TeamLiveStatus
 import ir.alifaniani.waymate.domain.model.TeamMember
 import ir.alifaniani.waymate.domain.model.UserRole
 import ir.alifaniani.waymate.domain.repository.AdminRepository
@@ -27,6 +28,7 @@ import ir.alifaniani.waymate.domain.repository.StatusRepository
 import ir.alifaniani.waymate.domain.repository.TeamRepository
 import ir.alifaniani.waymate.domain.usecase.ObserveLocationSharingStateUseCase
 import ir.alifaniani.waymate.domain.usecase.StopLocationSharingUseCase
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -58,11 +60,14 @@ class HomeViewModel(
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
+    private var statusUpdateJob: Job? = null
+    private var committedOperationalStatus: OperationalStatus = OperationalStatus.NORMAL
+
     init {
+        loadMyOperationalStatus()
         loadTeams()
         loadMessages()
         loadLiveStatuses()
-        loadMyOperationalStatus()
         loadPoints()
         refreshOfflineQueueCount()
         startPolling()
@@ -73,7 +78,27 @@ class HomeViewModel(
         val repo = statusRepository ?: return
         viewModelScope.launch(dispatcherProvider.main) {
             repo.getMyOperationalStatus()?.let { savedStatus ->
-                _uiState.update { it.copy(myOperationalStatus = savedStatus) }
+                committedOperationalStatus = savedStatus
+                _uiState.update { state ->
+                    state.copy(
+                        myOperationalStatus = savedStatus,
+                        liveStatuses = syncLiveStatusesWith(state.liveStatuses, savedStatus)
+                    )
+                }
+            }
+        }
+    }
+
+    private fun syncLiveStatusesWith(
+        statuses: List<TeamLiveStatus>,
+        myStatus: OperationalStatus
+    ): List<TeamLiveStatus> {
+        if (statuses.isEmpty()) return statuses
+        return statuses.mapIndexed { index, unit ->
+            if (index == 0 || unit.teamId == "team_alpha_001") {
+                unit.copy(operationalStatus = myStatus)
+            } else {
+                unit
             }
         }
     }
@@ -88,8 +113,8 @@ class HomeViewModel(
         }
     }
 
-    fun loadTeams() {
-        if (_uiState.value.isLoading) return
+    fun loadTeams(force: Boolean = false) {
+        if (!force && _uiState.value.isLoading) return
 
         _uiState.update {
             it.copy(
@@ -148,9 +173,9 @@ class HomeViewModel(
         viewModelScope.launch(dispatcherProvider.main) {
             when (val result = repo.getLiveTeamStatuses()) {
                 is Result.Success -> {
-                    _uiState.update {
-                        it.copy(
-                            liveStatuses = result.data,
+                    _uiState.update { state ->
+                        state.copy(
+                            liveStatuses = syncLiveStatusesWith(result.data, state.myOperationalStatus),
                             lastSyncTimestamp = System.currentTimeMillis()
                         )
                     }
@@ -165,22 +190,35 @@ class HomeViewModel(
 
     fun updateOperationalStatus(newStatus: OperationalStatus) {
         val repo = statusRepository ?: return
-        val previousStatus = _uiState.value.myOperationalStatus
-        _uiState.update { it.copy(myOperationalStatus = newStatus) }
+        statusUpdateJob?.cancel()
+        _uiState.update { state ->
+            state.copy(
+                myOperationalStatus = newStatus,
+                liveStatuses = syncLiveStatusesWith(state.liveStatuses, newStatus),
+                errorMessage = null
+            )
+        }
 
-        viewModelScope.launch(dispatcherProvider.main) {
+        statusUpdateJob = viewModelScope.launch(dispatcherProvider.main) {
             when (val result = repo.updateOperationalStatus(newStatus)) {
                 is Result.Success -> {
-                    _uiState.update {
-                        it.copy(
+                    committedOperationalStatus = result.data
+                    _uiState.update { state ->
+                        state.copy(
                             myOperationalStatus = result.data,
+                            liveStatuses = syncLiveStatusesWith(state.liveStatuses, result.data),
                             connectionStatus = ConnectionStatus.ONLINE
                         )
                     }
                     refreshOfflineQueueCount()
                 }
                 is Result.Error -> {
-                    _uiState.update { it.copy(myOperationalStatus = previousStatus) }
+                    _uiState.update { state ->
+                        state.copy(
+                            myOperationalStatus = committedOperationalStatus,
+                            liveStatuses = syncLiveStatusesWith(state.liveStatuses, committedOperationalStatus)
+                        )
+                    }
                     handleError(result)
                     refreshOfflineQueueCount()
                 }
@@ -278,7 +316,7 @@ class HomeViewModel(
             }
 
             if (result.syncedCount > 0) {
-                loadTeams()
+                loadTeams(force = true)
                 loadMessages()
                 loadLiveStatuses()
             }
@@ -403,15 +441,21 @@ class HomeViewModel(
         viewModelScope.launch(dispatcherProvider.main) {
             when (val result = teamRepository.createTeam(name, leadUserId, vehicleType, vehiclePlate, equipmentSummary, members)) {
                 is Result.Success -> {
-                    _uiState.update {
-                        it.copy(
+                    _uiState.update { state ->
+                        val updatedTeams = if (state.teams.any { it.id == result.data.id }) {
+                            state.teams.map { if (it.id == result.data.id) result.data else it }
+                        } else {
+                            state.teams + result.data
+                        }
+                        state.copy(
+                            teams = updatedTeams,
                             isManagementLoading = false,
                             managementFeedbackMessage = "گروه عملیاتی '${result.data.name}' با موفقیت ایجاد شد",
                             isManagementFeedbackError = false
                         )
                     }
                     refreshOfflineQueueCount()
-                    loadTeams()
+                    loadTeams(force = true)
                     loadManagementData(userRole)
                 }
                 is Result.Error -> {
@@ -430,21 +474,22 @@ class HomeViewModel(
     }
 
     fun toggleTeamStatus(team: Team, userRole: UserRole) {
-        _uiState.update { it.copy(isManagementLoading = true) }
+        _uiState.update { it.copy(isManagementLoading = true, managementFeedbackMessage = null) }
 
         viewModelScope.launch(dispatcherProvider.main) {
             val newStatus = !team.isActive
             when (val result = teamRepository.updateTeam(team.id, isActive = newStatus)) {
                 is Result.Success -> {
                     val statusText = if (newStatus) "فعال" else "غیرفعال"
-                    _uiState.update {
-                        it.copy(
+                    _uiState.update { state ->
+                        state.copy(
+                            teams = state.teams.map { if (it.id == team.id) result.data else it },
                             isManagementLoading = false,
                             managementFeedbackMessage = "وضعیت گروه '${team.name}' به $statusText تغییر یافت",
                             isManagementFeedbackError = false
                         )
                     }
-                    loadTeams()
+                    loadTeams(force = true)
                     loadManagementData(userRole)
                 }
                 is Result.Error -> {
@@ -462,7 +507,7 @@ class HomeViewModel(
     }
 
     fun addTeamMember(teamId: String, fullName: String, callsign: String, roleInTeam: String) {
-        _uiState.update { it.copy(isManagementLoading = true) }
+        _uiState.update { it.copy(isManagementLoading = true, managementFeedbackMessage = null) }
         viewModelScope.launch(dispatcherProvider.main) {
             when (val result = teamRepository.addMember(teamId, fullName, callsign, roleInTeam)) {
                 is Result.Success -> {
@@ -473,7 +518,7 @@ class HomeViewModel(
                             isManagementFeedbackError = false
                         )
                     }
-                    loadTeams()
+                    loadTeams(force = true)
                 }
                 is Result.Error -> {
                     _uiState.update {
@@ -490,7 +535,7 @@ class HomeViewModel(
     }
 
     fun removeTeamMember(teamId: String, memberId: String) {
-        _uiState.update { it.copy(isManagementLoading = true) }
+        _uiState.update { it.copy(isManagementLoading = true, managementFeedbackMessage = null) }
         viewModelScope.launch(dispatcherProvider.main) {
             when (val result = teamRepository.removeMember(teamId, memberId)) {
                 is Result.Success -> {
@@ -501,7 +546,7 @@ class HomeViewModel(
                             isManagementFeedbackError = false
                         )
                     }
-                    loadTeams()
+                    loadTeams(force = true)
                 }
                 is Result.Error -> {
                     _uiState.update {
@@ -534,6 +579,7 @@ class HomeViewModel(
                     val res = manager.drainQueue()
                     if (res.syncedCount > 0) {
                         _uiState.update { it.copy(offlineQueueCount = res.remainingCount) }
+                        loadTeams(force = true)
                     }
                 }
             }
@@ -729,7 +775,7 @@ class HomeViewModel(
 
     fun retry() {
         syncOfflineQueue()
-        loadTeams()
+        loadTeams(force = true)
         loadMessages()
         loadLiveStatuses()
         loadPoints()

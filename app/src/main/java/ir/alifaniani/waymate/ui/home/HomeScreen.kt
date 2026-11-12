@@ -1,45 +1,56 @@
 package ir.alifaniani.waymate.ui.home
 
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import ir.alifaniani.waymate.domain.model.User
-import ir.alifaniani.waymate.domain.model.UserRole
-import ir.alifaniani.waymate.ui.common.BadgeTone
-import ir.alifaniani.waymate.ui.common.BannerType
-import ir.alifaniani.waymate.ui.common.TacticalFeedbackBanner
-import ir.alifaniani.waymate.ui.common.TacticalOutlinedButton
-import ir.alifaniani.waymate.ui.common.TacticalScreenContainer
-import ir.alifaniani.waymate.ui.common.TacticalStatusBadge
-
-import ir.alifaniani.waymate.domain.model.PointCategory
-import ir.alifaniani.waymate.domain.model.PointOfInterest
-import ir.alifaniani.waymate.ui.home.map.PointOfInterestDialog
-
 import ir.alifaniani.waymate.domain.model.GroupMemberLocation
 import ir.alifaniani.waymate.domain.model.ManagedUser
-import ir.alifaniani.waymate.domain.model.Team
 import ir.alifaniani.waymate.domain.model.OperationalStatus
+import ir.alifaniani.waymate.domain.model.PointCategory
+import ir.alifaniani.waymate.domain.model.PointOfInterest
+import ir.alifaniani.waymate.domain.model.Team
+import ir.alifaniani.waymate.domain.model.User
+import ir.alifaniani.waymate.domain.model.UserRole
+import ir.alifaniani.waymate.ui.designsystem.CircularOrbitNavigationBar
+import ir.alifaniani.waymate.ui.designsystem.OrbitNavigationItem
+import ir.alifaniani.waymate.ui.designsystem.TacticalIcons
+import ir.alifaniani.waymate.ui.home.map.PointOfInterestDialog
+import ir.alifaniani.waymate.ui.theme.WayMateMidnightDark
+import kotlinx.coroutines.launch
 
 /**
- * Landing screen representing the authenticated destination,
- * formatted using the WayMate Dark Tactical design system.
+ * Secondary independent destinations reachable from Profile.
+ */
+private enum class SecondaryDestination {
+    SETTINGS,
+    ABOUT
+}
+
+/**
+ * Redesigned WayMate Home Hub.
+ *
+ * Orchestrates 5 dedicated primary destinations via fluid HorizontalPager and custom
+ * Circular Orbit Navigation system, plus 2 secondary overlay destinations (Settings and About).
+ *
+ * Key Interactions:
+ * 1. Horizontal swipe navigation between pages with Persian RTL support.
+ * 2. Strict gesture isolation: Map panning/zooming on Tab 0 (Live Map) is preserved without pager conflicts.
+ * 3. 100% synchronization across swipe, tap, orbit drag, and system back button.
+ * 4. Preserves 100% of underlying business logic, state holders, and operational workflows.
  */
 @Composable
 fun HomeScreen(
@@ -55,6 +66,8 @@ fun HomeScreen(
     onToggleUserStatus: (ManagedUser) -> Unit = {},
     onCreateTeam: (name: String, leadUserId: String, vehicleType: String, vehiclePlate: String, equipment: String) -> Unit = { _, _, _, _, _ -> },
     onToggleTeamStatus: (Team) -> Unit = {},
+    onAddTeamMember: (teamId: String, fullName: String, callsign: String, roleInTeam: String) -> Unit = { _, _, _, _ -> },
+    onRemoveTeamMember: (teamId: String, memberId: String) -> Unit = { _, _ -> },
     onDismissFeedback: () -> Unit = {},
     onSyncQueue: () -> Unit = {},
     onDismissSyncFeedback: () -> Unit = {},
@@ -76,108 +89,175 @@ fun HomeScreen(
     onRetryPermissionRequest: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    TacticalScreenContainer(modifier = modifier) {
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = "پایگاه عملیاتی وی‌میت",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Text(
-                    text = "ارتباط برقرار است (محیط آزمایشی)",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            TacticalStatusBadge(
-                text = "فعال / برخط",
-                tone = BadgeTone.SUCCESS
-            )
-        }
-
-        Spacer(modifier = Modifier.height(28.dp))
-
-        // Authenticated Tactical Credentials Card
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant,
-                    shape = RoundedCornerShape(12.dp)
-                ),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
+    // 5 Primary Orbit Destinations
+    val navItems = remember {
+        listOf(
+            OrbitNavigationItem(
+                id = "map",
+                title = "نقشه زنده",
+                icon = TacticalIcons.TacticalMap,
+                contentDescription = "نقشه عملیاتی و مکانی زنده"
             ),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Text(
-                    text = "مشخصات شناسه کاربری و عملیاتی",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary
-                )
+            OrbitNavigationItem(
+                id = "overview",
+                title = "نمای کلی",
+                icon = TacticalIcons.Overview,
+                contentDescription = "نمای کلی وضعیت عملیات"
+            ),
+            OrbitNavigationItem(
+                id = "teams",
+                title = "تیم‌ها",
+                icon = TacticalIcons.Teams,
+                contentDescription = "مدیریت گروه‌ها و اعضا"
+            ),
+            OrbitNavigationItem(
+                id = "operations",
+                title = "عملیات",
+                icon = TacticalIcons.Operations,
+                contentDescription = "ارتباطات و پیام‌های تاکتیکی"
+            ),
+            OrbitNavigationItem(
+                id = "profile",
+                title = "پروفایل",
+                icon = TacticalIcons.Profile,
+                contentDescription = "مشخصات و تنظیمات کاربری"
+            )
+        )
+    }
 
-                Spacer(modifier = Modifier.height(14.dp))
+    val coroutineScope = rememberCoroutineScope()
+    // Default to Overview (tab index 1)
+    val pagerState = rememberPagerState(initialPage = 1, pageCount = { navItems.size })
+    var activeSecondaryScreen by remember { mutableStateOf<SecondaryDestination?>(null) }
 
-                DetailItem(label = "شناسه تماس تاکتیکی", value = user.callsign)
-                DetailItem(
-                    label = "سطح دسترسی و نقش",
-                    value = when (user.role) {
-                        UserRole.OWNER -> "متولی اصلی سامانه (OWNER)"
-                        UserRole.COMMANDER -> "فرمانده عملیات (COMMANDER)"
-                        UserRole.TEAM_LEAD -> "سرتیم گشت (TEAM_LEAD)"
-                    }
-                )
-                DetailItem(label = "نام کاربری سیستم", value = user.username)
-                DetailItem(label = "شناسه رکورد", value = user.id)
+    // System Back Navigation Integration:
+    // 1. If currently inside a secondary destination (Settings/About), Back returns to Profile.
+    BackHandler(enabled = activeSecondaryScreen != null) {
+        activeSecondaryScreen = null
+    }
+
+    // 2. If on a primary destination other than Overview (index 1), Back returns to Overview.
+    BackHandler(enabled = activeSecondaryScreen == null && pagerState.currentPage != 1) {
+        coroutineScope.launch {
+            pagerState.animateScrollToPage(1)
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(WayMateMidnightDark)
+    ) {
+        // Primary Destination Pager with horizontal swipe and gesture isolation
+        HorizontalPager(
+            state = pagerState,
+            // Disable pager scrolling on Tab 0 (LiveMapScreen) to prevent stealing map gestures
+            userScrollEnabled = activeSecondaryScreen == null && pagerState.currentPage != 0,
+            modifier = Modifier.fillMaxSize()
+        ) { pageIndex ->
+            when (pageIndex) {
+                0 -> {
+                    LiveMapScreen(
+                        points = homeUiState.points,
+                        selectedPoint = homeUiState.selectedPoint,
+                        onSelectPoint = onSelectPoint,
+                        groupMembers = homeUiState.locationSharingState.activeSharers,
+                        selectedGroupMember = homeUiState.selectedGroupMember,
+                        onSelectGroupMember = onSelectGroupMember,
+                        onOpenCreatePointDialog = onOpenCreatePointDialog,
+                        onOpenEditPointDialog = onOpenEditPointDialog,
+                        onDeletePoint = onDeletePoint
+                    )
+                }
+                1 -> {
+                    OverviewScreen(
+                        user = user,
+                        homeUiState = homeUiState,
+                        onStatusSelected = onStatusSelected,
+                        onStartSharing = onStartSharing,
+                        onStopSharing = onStopSharing,
+                        onSyncQueue = onSyncQueue,
+                        onAcknowledgeMessage = onAcknowledgeMessage,
+                        onNavigateToOperations = {
+                            coroutineScope.launch {
+                                pagerState.animateScrollToPage(3)
+                            }
+                        }
+                    )
+                }
+                2 -> {
+                    TeamsScreen(
+                        user = user,
+                        homeUiState = homeUiState,
+                        onRetryTeams = onRetryTeams,
+                        onCreateUser = onCreateUser,
+                        onToggleUserStatus = onToggleUserStatus,
+                        onCreateTeam = onCreateTeam,
+                        onToggleTeamStatus = onToggleTeamStatus,
+                        onAddTeamMember = onAddTeamMember,
+                        onRemoveTeamMember = onRemoveTeamMember,
+                        onDismissFeedback = onDismissFeedback
+                    )
+                }
+                3 -> {
+                    OperationsScreen(
+                        user = user,
+                        homeUiState = homeUiState,
+                        onStatusSelected = onStatusSelected,
+                        onAcknowledgeMessage = onAcknowledgeMessage,
+                        onSendMessage = onSendMessage,
+                        onRefresh = onRefresh,
+                        onSyncQueue = onSyncQueue,
+                        onDismissSyncFeedback = onDismissSyncFeedback
+                    )
+                }
+                4 -> {
+                    ProfileScreen(
+                        user = user,
+                        onLogoutClicked = onLogoutClicked,
+                        onNavigateToSettings = { activeSecondaryScreen = SecondaryDestination.SETTINGS },
+                        onNavigateToAbout = { activeSecondaryScreen = SecondaryDestination.ABOUT }
+                    )
+                }
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        if (homeUiState.pointFeedbackMessage != null) {
-            TacticalFeedbackBanner(
-                title = "نقاط مشترک و نشانه‌های گروه",
-                message = homeUiState.pointFeedbackMessage,
-                type = BannerType.INFO
+        // Fixed Circular Orbit Navigation Bar (Visible when in Primary Destinations)
+        if (activeSecondaryScreen == null) {
+            CircularOrbitNavigationBar(
+                items = navItems,
+                selectedItemIndex = pagerState.currentPage,
+                onItemSelected = { targetIndex ->
+                    coroutineScope.launch {
+                        pagerState.animateScrollToPage(targetIndex)
+                    }
+                },
+                modifier = Modifier.align(Alignment.BottomCenter)
             )
-            Spacer(modifier = Modifier.height(14.dp))
         }
 
-        // Real-Time Consent-Based Location Sharing Control Card
-        LocationSharingControlCard(
-            sharingState = homeUiState.locationSharingState,
-            onStartSharing = onStartSharing,
-            onStopSharing = onStopSharing
-        )
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // Operational Tactical Map & Link Health Section
-        TacticalMapAndLinkSection(
-            points = homeUiState.points,
-            selectedPoint = homeUiState.selectedPoint,
-            onSelectPoint = onSelectPoint,
-            groupMembers = homeUiState.locationSharingState.activeSharers,
-            selectedGroupMember = homeUiState.selectedGroupMember,
-            onSelectGroupMember = onSelectGroupMember,
-            onOpenCreatePointDialog = onOpenCreatePointDialog,
-            onOpenEditPointDialog = onOpenEditPointDialog,
-            onDeletePoint = onDeletePoint,
-            offlineQueueCount = homeUiState.offlineQueueCount,
-            lastSyncTimestamp = homeUiState.lastSyncTimestamp
-        )
+        // Secondary Destinations (Settings & About) overlaid cleanly
+        AnimatedVisibility(
+            visible = activeSecondaryScreen != null,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            when (activeSecondaryScreen) {
+                SecondaryDestination.SETTINGS -> {
+                    SettingsScreen(
+                        onNavigateBack = { activeSecondaryScreen = null },
+                        onSyncQueue = onSyncQueue,
+                        offlineQueueCount = homeUiState.offlineQueueCount
+                    )
+                }
+                SecondaryDestination.ABOUT -> {
+                    AboutScreen(
+                        onNavigateBack = { activeSecondaryScreen = null }
+                    )
+                }
+                null -> Unit
+            }
+        }
 
         // Point of Interest Create / Edit Dialog
         if (homeUiState.isPointDialogVisible) {
@@ -197,7 +277,7 @@ fun HomeScreen(
             )
         }
 
-        // Location Permission Denied Dialog (With settings redirect if permanently denied)
+        // Location Permission Denied Dialog
         if (homeUiState.isLocationPermissionDenied) {
             LocationPermissionDeniedDialog(
                 isPermanentlyDenied = homeUiState.isLocationPermissionPermanentlyDenied,
@@ -206,84 +286,5 @@ fun HomeScreen(
                 onDismiss = onDismissLocationPermissionDenied
             )
         }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Phase 8 & 10: Communications, In-Band Messaging, Operational Status & Offline Queue
-        TacticalCommunicationsSection(
-            currentUser = user,
-            uiState = homeUiState,
-            onStatusSelected = onStatusSelected,
-            onAcknowledgeMessage = onAcknowledgeMessage,
-            onSendMessage = onSendMessage,
-            onRefresh = onRefresh,
-            onSyncQueue = onSyncQueue,
-            onDismissSyncFeedback = onDismissSyncFeedback
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Phase 9: Tactical Management & Permissions Panel (OWNER / COMMANDER)
-        if (user.role != UserRole.TEAM_LEAD) {
-            TacticalManagementSection(
-                currentUser = user,
-                uiState = homeUiState,
-                onCreateUser = onCreateUser,
-                onToggleUserStatus = onToggleUserStatus,
-                onCreateTeam = onCreateTeam,
-                onToggleTeamStatus = onToggleTeamStatus,
-                onDismissFeedback = onDismissFeedback
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-        }
-
-        // Tactical Users and Operational Groups Section
-        TacticalUserGroupSection(
-            uiState = homeUiState,
-            onRetry = onRetryTeams
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        TacticalFeedbackBanner(
-            title = "وضعیت پیاده‌سازی و یکپارچگی",
-            message = "اطلاعات هویتی و گروه‌های عملیاتی مستقیماً از Backend فراخوانی شده است. نقشه عملیاتی با لایه‌های معابر، نقاط مشترک و نشانگرهای زنده مکان همنوردان گروه با رضایت صریح فعال است.",
-            type = BannerType.INFO
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        TacticalOutlinedButton(
-            text = "خروج از حساب کاربری",
-            onClick = onLogoutClicked,
-            isDestructive = true
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-    }
-}
-
-@Composable
-private fun DetailItem(
-    label: String,
-    value: String
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontWeight = FontWeight.Medium
-        )
     }
 }

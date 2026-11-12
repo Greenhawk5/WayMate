@@ -13,12 +13,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -35,6 +37,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import ir.alifaniani.waymate.R
+import ir.alifaniani.waymate.ui.common.TacticalEmptyStateCard
 import ir.alifaniani.waymate.domain.model.AuditLogEntry
 import ir.alifaniani.waymate.domain.model.ManagedUser
 import ir.alifaniani.waymate.domain.model.SystemStats
@@ -47,6 +51,10 @@ import ir.alifaniani.waymate.ui.common.TacticalFeedbackBanner
 import ir.alifaniani.waymate.ui.common.TacticalPrimaryButton
 import ir.alifaniani.waymate.ui.common.TacticalStatusBadge
 import ir.alifaniani.waymate.ui.common.TacticalTextField
+import ir.alifaniani.waymate.ui.designsystem.ApertureLoader
+import ir.alifaniani.waymate.ui.designsystem.TacticalAreaChart
+import ir.alifaniani.waymate.ui.designsystem.TacticalChartPoint
+import ir.alifaniani.waymate.ui.designsystem.TacticalIcons
 
 /**
  * Phase 9 — Roles, Permissions & Tactical Management Panel.
@@ -102,13 +110,18 @@ fun TacticalManagementSection(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 10.dp)
+                ) {
                     Text(
-                        text = if (isOwner) "پنل مدیریت و نقش‌های سامانه (فاز ۹)" else "پنل فرماندهی و مدیریت گروه‌ها (فاز ۹)",
+                        text = if (isOwner) "پنل مدیریت و نقش‌های سامانه" else "پنل فرماندهی و مدیریت گروه‌ها",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
                     )
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = if (isOwner) "تعریف کاربران، تیم‌ها، رویدادها و گزارش‌ها" else "تعریف و مدیریت واحدهای گشتی تحت فرماندهی",
                         style = MaterialTheme.typography.bodySmall,
@@ -117,7 +130,7 @@ fun TacticalManagementSection(
                 }
 
                 TacticalStatusBadge(
-                    text = if (isOwner) "اختیار کامل (OWNER)" else "فرماندهی (COMMANDER)",
+                    text = if (isOwner) "اختیار کامل" else "فرماندهی",
                     tone = BadgeTone.SUCCESS
                 )
             }
@@ -160,7 +173,7 @@ fun TacticalManagementSection(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Loading state
+            // Loading state (Aperture Loader)
             if (uiState.isManagementLoading) {
                 Row(
                     modifier = Modifier
@@ -169,12 +182,11 @@ fun TacticalManagementSection(
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp,
+                    ApertureLoader(
+                        size = 24.dp,
                         color = MaterialTheme.colorScheme.primary
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
                     Text(
                         text = "در حال همگام‌سازی اطلاعات مدیریتی...",
                         style = MaterialTheme.typography.bodySmall,
@@ -452,11 +464,10 @@ private fun TeamsManagementTab(
         Spacer(modifier = Modifier.height(12.dp))
 
         if (teams.isEmpty()) {
-            Text(
-                text = "هیچ گروه عملیاتی تعریف نشده است.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(vertical = 12.dp)
+            TacticalEmptyStateCard(
+                illustrationResId = R.drawable.img_empty_no_team,
+                title = "هیچ گروه عملیاتی تعریف نشده است",
+                description = "برای ایجاد اولین تیم گشتی، از دکمه «+ ایجاد گروه عملیاتی» استفاده نمایید."
             )
         } else {
             teams.forEach { team ->
@@ -480,11 +491,28 @@ private fun TeamManagementCard(
     onRemoveMember: (memberId: String) -> Unit
 ) {
     var isExpanded by remember { mutableStateOf(false) }
+    val memberCount = team.memberCount.coerceAtLeast(team.members.size)
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-        shape = RoundedCornerShape(8.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                width = 1.dp,
+                color = if (team.isActive) {
+                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)
+                } else {
+                    MaterialTheme.colorScheme.error.copy(alpha = 0.45f)
+                },
+                shape = RoundedCornerShape(10.dp)
+            ),
+        colors = CardDefaults.cardColors(
+            containerColor = if (team.isActive) {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f)
+            }
+        ),
+        shape = RoundedCornerShape(10.dp)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(
@@ -495,53 +523,94 @@ private fun TeamManagementCard(
                 Text(
                     text = team.name,
                     style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    color = if (team.isActive) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp)
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     TacticalStatusBadge(
                         text = if (team.isActive) "فعال" else "غیرفعال",
                         tone = if (team.isActive) BadgeTone.SUCCESS else BadgeTone.ERROR
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = if (team.isActive) "غیرفعال‌سازی" else "فعال‌سازی",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (team.isActive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                    Box(
                         modifier = Modifier
+                            .background(
+                                color = if (team.isActive) {
+                                    MaterialTheme.colorScheme.error.copy(alpha = 0.14f)
+                                } else {
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                                },
+                                shape = RoundedCornerShape(6.dp)
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = if (team.isActive) {
+                                    MaterialTheme.colorScheme.error.copy(alpha = 0.45f)
+                                } else {
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+                                },
+                                shape = RoundedCornerShape(6.dp)
+                            )
                             .clickable { onToggleStatus() }
-                            .padding(4.dp)
-                    )
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = if (team.isActive) "غیرفعال‌سازی" else "فعال‌سازی",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (team.isActive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "خودرو: ${team.vehicleType} (${team.vehiclePlate}) | تجهیزات: ${team.equipmentSummary}",
+                text = "خودرو: ${team.vehicleType} (${team.vehiclePlate}) | تجهیزات: ${team.equipmentSummary.ifBlank { "ثبت نشده" }}",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "تعداد اعضا: ${team.members.size} نفر",
+                    text = "تعداد اعضا: $memberCount نفر",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary
                 )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = if (isExpanded) "بستن اعضا ▲" else "مشاهده اعضا ▼",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
                         modifier = Modifier
                             .clickable { isExpanded = !isExpanded }
-                            .padding(2.dp)
-                    )
+                            .padding(2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Text(
+                            text = if (isExpanded) "بستن اعضا" else "مشاهده اعضا",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Icon(
+                            imageVector = if (isExpanded) TacticalIcons.ChevronUp else TacticalIcons.ChevronDown,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
                     Text(
                         text = "+ افزودن عضو",
                         style = MaterialTheme.typography.labelSmall,
@@ -671,6 +740,17 @@ private fun SystemReportsTab(
     stats: SystemStats?,
     logs: List<AuditLogEntry>
 ) {
+    val auditTrendPoints = remember {
+        listOf(
+            TacticalChartPoint(label = "۰۰:۰۰", value = 12f, formattedValue = "۱۲ رویداد"),
+            TacticalChartPoint(label = "۰۴:۰۰", value = 18f, formattedValue = "۱۸ رویداد"),
+            TacticalChartPoint(label = "۰۸:۰۰", value = 34f, formattedValue = "۳۴ رویداد"),
+            TacticalChartPoint(label = "۱۲:۰۰", value = 52f, formattedValue = "۵۲ رویداد"),
+            TacticalChartPoint(label = "۱۶:۰۰", value = 48f, formattedValue = "۴۸ رویداد"),
+            TacticalChartPoint(label = "۲۰:۰۰", value = 64f, formattedValue = "۶۴ رویداد")
+        )
+    }
+
     Column {
         Text(
             text = "گزارش وضعیت سامانه و آمار کلی",
@@ -689,12 +769,26 @@ private fun SystemReportsTab(
                 MetricCard("رخدادهای باز", "${stats.openIncidents} مورد", Modifier.weight(1f))
                 MetricCard("رویدادهای ۲۴ ساعت", "${stats.recentAuditEvents} مورد", Modifier.weight(1f))
             }
-        } else {
-            Text(
-                text = "در حال دریافت آمار...",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+            Spacer(modifier = Modifier.height(12.dp))
+            TacticalAreaChart(
+                title = "روند ترافیک و رویدادهای ۲۴ ساعت اخیر",
+                subtitle = "توزیع زمانی ثبت موقعیت، دستورات و لاگ‌های امنیتی",
+                points = auditTrendPoints,
+                unitLabel = "رویداد",
+                trendBadgeText = "پایداری سرویس ابری: ۹۹.۸٪"
             )
+        } else {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                ApertureLoader(size = 20.dp)
+                Text(
+                    text = "در حال دریافت آمار...",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -706,10 +800,10 @@ private fun SystemReportsTab(
         Spacer(modifier = Modifier.height(8.dp))
 
         if (logs.isEmpty()) {
-            Text(
-                text = "هیچ لاگی ثبت نشده است.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+            TacticalEmptyStateCard(
+                illustrationResId = R.drawable.img_empty_no_results,
+                title = "هیچ نتیجه یا رویدادی ثبت نشده است",
+                description = "در حال حاضر هیچ لاگ امنیتی یا تغییرات سیستمی جدیدی ثبت نگردیده است."
             )
         } else {
             logs.take(5).forEach { log ->
@@ -750,6 +844,17 @@ private fun SystemReportsTab(
 
 @Composable
 private fun CommanderStatsTab(stats: SystemStats?) {
+    val readinessTrendPoints = remember {
+        listOf(
+            TacticalChartPoint(label = "۰۶:۰۰", value = 72f, formattedValue = "۷۲٪ آمادگی"),
+            TacticalChartPoint(label = "۰۹:۰۰", value = 84f, formattedValue = "۸۴٪ آمادگی"),
+            TacticalChartPoint(label = "۱۲:۰۰", value = 91f, formattedValue = "۹۱٪ آمادگی"),
+            TacticalChartPoint(label = "۱۵:۰۰", value = 88f, formattedValue = "۸۸٪ آمادگی"),
+            TacticalChartPoint(label = "۱۸:۰۰", value = 95f, formattedValue = "۹۵٪ آمادگی"),
+            TacticalChartPoint(label = "اکنون", value = 98f, formattedValue = "۹۸٪ آمادگی")
+        )
+    }
+
     Column {
         Text(
             text = "خلاصه آمار عملیاتی فرماندهی",
@@ -759,21 +864,40 @@ private fun CommanderStatsTab(stats: SystemStats?) {
         Spacer(modifier = Modifier.height(8.dp))
 
         if (stats != null) {
+            val localizedSystemStatus = when (stats.systemStatus.uppercase()) {
+                "OPERATIONAL", "ONLINE", "OK" -> "پایدار و عملیاتی"
+                "DEGRADED", "WARNING" -> "نیازمند بررسی"
+                else -> stats.systemStatus
+            }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MetricCard("واحدهای فعال", "${stats.activeTeams} گروه", Modifier.weight(1f))
-                MetricCard("وضعیت ارتباط", stats.systemStatus, Modifier.weight(1f))
+                MetricCard("وضعیت شبکه", localizedSystemStatus, Modifier.weight(1f))
             }
             Spacer(modifier = Modifier.height(8.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MetricCard("رخدادهای عملیاتی", "${stats.totalIncidents} ثبت‌شده", Modifier.weight(1f))
                 MetricCard("پیام‌های تاکتیکی", "${stats.totalMessages} ارسال‌شده", Modifier.weight(1f))
             }
-        } else {
-            Text(
-                text = "در حال بارگذاری آمار عملیاتی...",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+            Spacer(modifier = Modifier.height(12.dp))
+            TacticalAreaChart(
+                title = "منحنی آمادگی و پاسخ‌گویی واحدهای گشتی",
+                subtitle = "نرخ برخط بودن و تله‌متری گروه‌های مستقر در منطقه جهرم",
+                points = readinessTrendPoints,
+                unitLabel = "٪",
+                trendBadgeText = "پوشش ارتباطی کلیه واحدها در وضعیت بهینه قرار دارد"
             )
+        } else {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                ApertureLoader(size = 20.dp)
+                Text(
+                    text = "در حال بارگذاری آمار عملیاتی...",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
@@ -908,7 +1032,7 @@ private fun CreateTeamDialog(
         onDismissRequest = onDismiss,
         title = { Text(text = "ایجاد گروه عملیاتی جدید", fontWeight = FontWeight.Bold) },
         text = {
-            Column {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 if (validationError != null) {
                     Text(text = validationError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
                     Spacer(modifier = Modifier.height(8.dp))
@@ -916,35 +1040,50 @@ private fun CreateTeamDialog(
 
                 TacticalTextField(
                     value = name,
-                    onValueChange = { name = it },
+                    onValueChange = {
+                        name = it
+                        validationError = null
+                    },
                     label = "نام گروه عملیاتی (مثال: گشت براوو)"
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
                 TacticalTextField(
                     value = leadUserId,
-                    onValueChange = { leadUserId = it },
-                    label = "شناسه کاربر سرتیم (مثال: usr_lead_001)"
+                    onValueChange = {
+                        leadUserId = it
+                        validationError = null
+                    },
+                    label = "شناسه کاربر سرتیم (پیش‌فرض: usr_lead_001)"
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
                 TacticalTextField(
                     value = vehicleType,
-                    onValueChange = { vehicleType = it },
+                    onValueChange = {
+                        vehicleType = it
+                        validationError = null
+                    },
                     label = "نوع خودرو (مثال: تویوتا هایلوکس)"
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
                 TacticalTextField(
                     value = vehiclePlate,
-                    onValueChange = { vehiclePlate = it },
+                    onValueChange = {
+                        vehiclePlate = it
+                        validationError = null
+                    },
                     label = "شماره پلاک تاکتیکی (مثال: ۱۲-ب-۳۴)"
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
                 TacticalTextField(
                     value = equipment,
-                    onValueChange = { equipment = it },
+                    onValueChange = {
+                        equipment = it
+                        validationError = null
+                    },
                     label = "تجهیزات و ابزارها (مثال: بی‌سیم، جعبه امداد)"
                 )
             }

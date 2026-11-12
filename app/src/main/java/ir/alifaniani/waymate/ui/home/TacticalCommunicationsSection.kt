@@ -35,6 +35,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ir.alifaniani.waymate.domain.model.ConnectionStatus
@@ -49,6 +51,7 @@ import ir.alifaniani.waymate.ui.common.TacticalFeedbackBanner
 import ir.alifaniani.waymate.ui.common.TacticalOutlinedButton
 import ir.alifaniani.waymate.ui.common.TacticalPrimaryButton
 import ir.alifaniani.waymate.ui.common.TacticalStatusBadge
+import ir.alifaniani.waymate.ui.designsystem.TacticalIcons
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -105,7 +108,7 @@ fun TacticalCommunicationsSection(
                         .padding(end = 8.dp)
                 ) {
                     Text(
-                        text = "ارتباطات و وضعیت عملیاتی (فاز ۸ و ۱۰)",
+                        text = "ارتباطات و وضعیت عملیاتی",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
@@ -198,7 +201,8 @@ fun TacticalCommunicationsSection(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 OperationalStatusChip(
-                    title = "عادی (Normal)",
+                    title = "عادی",
+                    subtitleCode = "NORMAL",
                     status = OperationalStatus.NORMAL,
                     isSelected = uiState.myOperationalStatus == OperationalStatus.NORMAL,
                     onClick = { onStatusSelected(OperationalStatus.NORMAL) },
@@ -206,7 +210,8 @@ fun TacticalCommunicationsSection(
                 )
 
                 OperationalStatusChip(
-                    title = "تعقیب (Pursuing)",
+                    title = "تعقیب و پایش",
+                    subtitleCode = "PURSUIT",
                     status = OperationalStatus.PURSUING,
                     isSelected = uiState.myOperationalStatus == OperationalStatus.PURSUING,
                     onClick = { onStatusSelected(OperationalStatus.PURSUING) },
@@ -214,7 +219,8 @@ fun TacticalCommunicationsSection(
                 )
 
                 OperationalStatusChip(
-                    title = "درگیر (Engaged)",
+                    title = "درگیر عملیات",
+                    subtitleCode = "ENGAGED",
                     status = OperationalStatus.ENGAGED,
                     isSelected = uiState.myOperationalStatus == OperationalStatus.ENGAGED,
                     onClick = { onStatusSelected(OperationalStatus.ENGAGED) },
@@ -403,6 +409,7 @@ fun TacticalCommunicationsSection(
 @Composable
 private fun OperationalStatusChip(
     title: String,
+    subtitleCode: String,
     status: OperationalStatus,
     isSelected: Boolean,
     onClick: () -> Unit,
@@ -419,27 +426,44 @@ private fun OperationalStatusChip(
     }
 
     val backgroundColor = if (isSelected) {
-        borderColor.copy(alpha = 0.15f)
+        borderColor.copy(alpha = 0.18f)
     } else {
         Color(0xFF151C24)
     }
 
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(backgroundColor)
-            .border(1.dp, borderColor, RoundedCornerShape(8.dp))
+            .border(1.dp, borderColor, RoundedCornerShape(10.dp))
             .clickable { onClick() }
-            .padding(vertical = 10.dp, horizontal = 6.dp),
+            .padding(vertical = 8.dp, horizontal = 6.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-            color = if (isSelected) Color.White else Color(0xFF94A3B8),
-            fontSize = 11.sp
-        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                color = if (isSelected) Color.White else Color(0xFFCBD5E1),
+                fontSize = 11.sp,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = subtitleCode,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (isSelected) borderColor else Color(0xFF64748B),
+                fontSize = 9.sp,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+                maxLines = 1
+            )
+        }
     }
 }
 
@@ -469,10 +493,10 @@ private fun TacticalMessageCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(backgroundColor)
-            .border(1.dp, borderColor, RoundedCornerShape(8.dp))
-            .padding(10.dp)
+            .border(1.dp, borderColor, RoundedCornerShape(10.dp))
+            .padding(12.dp)
     ) {
         Column {
             Row(
@@ -480,26 +504,33 @@ private fun TacticalMessageCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.weight(1f).padding(end = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
                         text = message.senderCallsign,
+                        modifier = Modifier.weight(1f, fill = false),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
-                        color = if (isUrgent) Color(0xFFFF8A80) else MaterialTheme.colorScheme.primary
+                        color = if (isUrgent) Color(0xFFFF8A80) else MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = formattedTime,
                         style = MaterialTheme.typography.labelSmall,
                         color = Color(0xFF64748B),
-                        fontSize = 10.sp
+                        fontSize = 10.sp,
+                        maxLines = 1
                     )
                 }
 
                 when {
                     message.isPendingSync -> {
                         TacticalStatusBadge(
-                            text = "در صف ارسال ⏳",
+                            text = "در صف ارسال",
                             tone = BadgeTone.WARNING
                         )
                     }
@@ -511,7 +542,7 @@ private fun TacticalMessageCard(
                     }
                     isAcked -> {
                         TacticalStatusBadge(
-                            text = "تأییدشده ✓",
+                            text = "تأییدشده",
                             tone = BadgeTone.NEUTRAL
                         )
                     }
@@ -541,6 +572,7 @@ private fun TacticalMessageCard(
                 ) {
                     TacticalOutlinedButton(
                         text = "مشاهده شد / تایید دریافت",
+                        leadingIcon = TacticalIcons.Check,
                         onClick = onAcknowledge,
                         modifier = Modifier.wrapContentWidth()
                     )
@@ -560,17 +592,17 @@ private fun LiveUnitStatusRow(unit: TeamLiveStatus) {
 
     val statusPersian = when (unit.operationalStatus) {
         OperationalStatus.NORMAL -> "عادی"
-        OperationalStatus.PURSUING -> "تعقیب"
-        OperationalStatus.ENGAGED -> "درگیر"
+        OperationalStatus.PURSUING -> "تعقیب و پایش"
+        OperationalStatus.ENGAGED -> "درگیر عملیات"
     }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(8.dp))
             .background(Color(0xFF151C24))
-            .border(1.dp, Color(0xFF242E3B), RoundedCornerShape(6.dp))
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .border(1.dp, Color(0xFF242E3B), RoundedCornerShape(8.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -580,11 +612,14 @@ private fun LiveUnitStatusRow(unit: TeamLiveStatus) {
                 .padding(end = 8.dp)
         ) {
             Text(
-                text = "${unit.teamName} (${unit.callsign})",
+                text = "${unit.teamName} • ${unit.callsign}",
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Medium,
-                color = Color.White
+                color = Color.White,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = "وضعیت عملیاتی: $statusPersian",
                 style = MaterialTheme.typography.labelSmall,

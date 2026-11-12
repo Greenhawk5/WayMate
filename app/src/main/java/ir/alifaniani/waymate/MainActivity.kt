@@ -15,26 +15,33 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
+import ir.alifaniani.waymate.data.session.OnboardingPreferences
 import ir.alifaniani.waymate.service.LocationSharingService
 import ir.alifaniani.waymate.ui.auth.LoginScreen
 import ir.alifaniani.waymate.ui.auth.LoginViewModel
 import ir.alifaniani.waymate.ui.home.HomeScreen
 import ir.alifaniani.waymate.ui.home.HomeViewModel
+import ir.alifaniani.waymate.ui.onboarding.OnboardingScreen
 import ir.alifaniani.waymate.ui.theme.WayMateTheme
 
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        setTheme(R.style.Theme_WayMate)
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
@@ -61,11 +68,13 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             WayMateTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
                     WayMateAppShell(
                         loginViewModel = loginViewModel,
-                        homeViewModel = homeViewModel,
-                        modifier = Modifier.padding(innerPadding)
+                        homeViewModel = homeViewModel
                     )
                 }
             }
@@ -82,11 +91,12 @@ fun WayMateAppShell(
     homeViewModel: HomeViewModel,
     modifier: Modifier = Modifier
 ) {
-    val uiState by loginViewModel.uiState.collectAsState()
-    val homeUiState by homeViewModel.uiState.collectAsState()
-
     val context = LocalContext.current
     val activity = context as? Activity
+    val onboardingPrefs = remember { OnboardingPreferences(context) }
+    var showOnboarding by remember { mutableStateOf(!onboardingPrefs.isOnboardingCompleted) }
+    val uiState by loginViewModel.uiState.collectAsState()
+    val homeUiState by homeViewModel.uiState.collectAsState()
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -143,6 +153,8 @@ fun WayMateAppShell(
             onToggleTeamStatus = { team ->
                 homeViewModel.toggleTeamStatus(team, currentUser.role)
             },
+            onAddTeamMember = homeViewModel::addTeamMember,
+            onRemoveTeamMember = homeViewModel::removeTeamMember,
             onDismissFeedback = homeViewModel::dismissManagementFeedback,
             onSyncQueue = homeViewModel::syncOfflineQueue,
             onDismissSyncFeedback = homeViewModel::dismissSyncFeedback,
@@ -227,12 +239,21 @@ fun WayMateAppShell(
             },
             modifier = modifier
         )
+    } else if (showOnboarding) {
+        OnboardingScreen(
+            onFinishOnboarding = {
+                onboardingPrefs.isOnboardingCompleted = true
+                showOnboarding = false
+            },
+            modifier = modifier
+        )
     } else {
         LoginScreen(
             uiState = uiState,
             onUsernameChanged = loginViewModel::onUsernameChanged,
             onPasswordChanged = loginViewModel::onPasswordChanged,
             onLoginClicked = loginViewModel::login,
+            onOpenOnboarding = { showOnboarding = true },
             modifier = modifier
         )
     }

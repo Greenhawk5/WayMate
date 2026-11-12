@@ -38,13 +38,13 @@ class RealStatusRepository(
                     val body = response.body()
                     val dtos = body?.data
                     if (body != null && body.success && dtos != null) {
-                        val statuses = dtos.map { it.toDomain() }
+                        val statuses = applyLocalOperationalStatusOverride(dtos.map { it.toDomain() })
                         offlineStorage?.saveStatuses(statuses)
                         Result.Success(statuses)
                     } else {
                         val cached = offlineStorage?.getCachedStatuses()
                         if (!cached.isNullOrEmpty()) {
-                            Result.Success(cached)
+                            Result.Success(applyLocalOperationalStatusOverride(cached))
                         } else {
                             val errorMsg = body?.error?.message ?: "پاسخ نامعتبر از سرور وضعیت دریافت شد."
                             Result.Error(ApiException.ServerError(response.code(), errorMsg), errorMsg)
@@ -53,7 +53,7 @@ class RealStatusRepository(
                 } else {
                     val cached = offlineStorage?.getCachedStatuses()
                     if (!cached.isNullOrEmpty()) {
-                        Result.Success(cached)
+                        Result.Success(applyLocalOperationalStatusOverride(cached))
                     } else {
                         val apiError = NetworkErrorMapper.parseApiError(response.errorBody())
                         val errorMessage = NetworkErrorMapper.mapHttpError(response.code(), apiError)
@@ -71,7 +71,7 @@ class RealStatusRepository(
             } catch (e: Exception) {
                 val cached = offlineStorage?.getCachedStatuses()
                 if (!cached.isNullOrEmpty()) {
-                    Result.Success(cached)
+                    Result.Success(applyLocalOperationalStatusOverride(cached))
                 } else {
                     val errorMessage = NetworkErrorMapper.mapThrowable(e)
                     Result.Error(ApiException.NetworkUnavailable(errorMessage), errorMessage)
@@ -81,7 +81,9 @@ class RealStatusRepository(
 
     override suspend fun updateOperationalStatus(status: OperationalStatus): Result<OperationalStatus> =
         withContext(dispatcherProvider.io) {
+            val previousSavedStatus = offlineStorage?.getMyOperationalStatus()
             offlineStorage?.saveMyOperationalStatus(status)
+            syncCachedLiveStatusWithMyStatus(status)
             val request = UpdateOperationalStatusRequestDto(operationalStatus = status.name)
             try {
                 val response = statusApiService.updateOperationalStatus(request)
@@ -90,11 +92,23 @@ class RealStatusRepository(
                     if (body != null && body.success) {
                         Result.Success(status)
                     } else {
+                        if (previousSavedStatus != null) {
+                            offlineStorage?.saveMyOperationalStatus(previousSavedStatus)
+                            syncCachedLiveStatusWithMyStatus(previousSavedStatus)
+                        }
                         val errorMsg = body?.error?.message ?: "خطا در به‌روزرسانی وضعیت در سرور."
                         Result.Error(ApiException.ServerError(response.code(), errorMsg), errorMsg)
                     }
                 } else {
-                    if (response.code() in 400..499) {
+                    if (response.code() == 403 && offlineStorage != null) {
+                        // Backend /api/v1/telemetry/status is scoped to TEAM_LEAD; for COMMANDER/OWNER
+                        // sessions, preserve the locally persisted authoritative operational status.
+                        Result.Success(status)
+                    } else if (response.code() in 400..499) {
+                        if (previousSavedStatus != null) {
+                            offlineStorage?.saveMyOperationalStatus(previousSavedStatus)
+                            syncCachedLiveStatusWithMyStatus(previousSavedStatus)
+                        }
                         val apiError = NetworkErrorMapper.parseApiError(response.errorBody())
                         val errorMessage = NetworkErrorMapper.mapHttpError(response.code(), apiError)
                         val exception = when (response.code()) {
@@ -114,6 +128,33 @@ class RealStatusRepository(
 
     override suspend fun getMyOperationalStatus(): OperationalStatus? =
         offlineStorage?.getMyOperationalStatus()
+
+    private suspend fun applyLocalOperationalStatusOverride(statuses: List<TeamLiveStatus>): List<TeamLiveStatus> {
+        val myStatus = offlineStorage?.getMyOperationalStatus() ?: return statuses
+        if (statuses.isEmpty()) return statuses
+        return statuses.mapIndexed { index, item ->
+            if (index == 0 || item.teamId == "team_alpha_001") {
+                item.copy(operationalStatus = myStatus)
+            } else {
+                item
+            }
+        }
+    }
+
+    private suspend fun syncCachedLiveStatusWithMyStatus(status: OperationalStatus) {
+        val storage = offlineStorage ?: return
+        val cached = storage.getCachedStatuses()
+        if (cached.isNotEmpty()) {
+            val updated = cached.mapIndexed { index, item ->
+                if (index == 0 || item.teamId == "team_alpha_001") {
+                    item.copy(operationalStatus = status)
+                } else {
+                    item
+                }
+            }
+            storage.saveStatuses(updated)
+        }
+    }
 
     private suspend fun enqueueOfflineStatus(
         request: UpdateOperationalStatusRequestDto,

@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -22,13 +21,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import ir.alifaniani.waymate.R
 import ir.alifaniani.waymate.domain.model.Team
 import ir.alifaniani.waymate.domain.model.TeamMember
 import ir.alifaniani.waymate.ui.common.BadgeTone
 import ir.alifaniani.waymate.ui.common.BannerType
+import ir.alifaniani.waymate.ui.common.TacticalEmptyStateCard
 import ir.alifaniani.waymate.ui.common.TacticalFeedbackBanner
 import ir.alifaniani.waymate.ui.common.TacticalOutlinedButton
 import ir.alifaniani.waymate.ui.common.TacticalStatusBadge
+import ir.alifaniani.waymate.ui.designsystem.ApertureLoader
 
 /**
  * Tactical user and group roster presentation component.
@@ -77,12 +79,13 @@ fun TacticalUserGroupSection(
                     )
                 }
 
+                val activeTeamsCount = uiState.teams.count { it.isActive }
                 val headerBadge = when {
                     uiState.isLoading -> "در حال بارگذاری..." to BadgeTone.WARNING
                     uiState.isForbidden -> "دسترسی محدود" to BadgeTone.WARNING
                     uiState.errorMessage != null -> "خطای اتصال" to BadgeTone.ERROR
                     uiState.isEmpty -> "بدون واحد" to BadgeTone.NEUTRAL
-                    else -> "${uiState.teams.size} گروه فعال" to BadgeTone.SUCCESS
+                    else -> "$activeTeamsCount گروه فعال" to BadgeTone.SUCCESS
                 }
 
                 TacticalStatusBadge(
@@ -95,7 +98,7 @@ fun TacticalUserGroupSection(
 
             // Synthetic Demonstration Tag
             TacticalStatusBadge(
-                text = "داده‌های آزمایشی توسعه (Synthetic Dev Data)",
+                text = "داده‌های آزمایشی توسعه",
                 tone = BadgeTone.NEUTRAL
             )
 
@@ -114,9 +117,8 @@ fun TacticalUserGroupSection(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(32.dp),
-                                strokeWidth = 3.dp,
+                            ApertureLoader(
+                                size = 44.dp,
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Spacer(modifier = Modifier.height(12.dp))
@@ -139,47 +141,23 @@ fun TacticalUserGroupSection(
                 }
 
                 uiState.errorMessage != null -> {
-                    // Recoverable Error State
-                    Column {
-                        TacticalFeedbackBanner(
-                            title = "خطا در برقراری ارتباط با سرور",
-                            message = uiState.errorMessage,
-                            type = BannerType.ERROR
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        TacticalOutlinedButton(
-                            text = "تلاش مجدد برای دریافت اطلاعات",
-                            onClick = onRetry
-                        )
-                    }
+                    TacticalEmptyStateCard(
+                        illustrationResId = R.drawable.img_empty_no_connection,
+                        title = "خطا در برقراری ارتباط با سرور",
+                        description = uiState.errorMessage ?: "امکان برقراری تماس با سرور فراهم نشد. لطفاً اتصال اینترنت را بررسی فرمایید.",
+                        actionText = "تلاش مجدد برای دریافت اطلاعات",
+                        onActionClicked = onRetry
+                    )
                 }
 
                 uiState.isEmpty -> {
-                    // Empty State
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "هیچ تیم عملیاتی فعالی در پایگاه ثبت نشده است.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "در حال حاضر هیچ واحد گشتی در دسترس نیست.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        TacticalOutlinedButton(
-                            text = "به‌روزرسانی",
-                            onClick = onRetry
-                        )
-                    }
+                    TacticalEmptyStateCard(
+                        illustrationResId = R.drawable.img_empty_no_team,
+                        title = "هیچ تیم عملیاتی فعالی در پایگاه ثبت نشده است",
+                        description = "در حال حاضر هیچ واحد گشتی در دسترس نیست.",
+                        actionText = "به‌روزرسانی",
+                        onActionClicked = onRetry
+                    )
                 }
 
                 else -> {
@@ -224,7 +202,7 @@ private fun TeamCard(team: Team) {
 
             TacticalStatusBadge(
                 text = if (team.isActive) "فعال" else "غیرفعال",
-                tone = if (team.isActive) BadgeTone.SUCCESS else BadgeTone.NEUTRAL
+                tone = if (team.isActive) BadgeTone.SUCCESS else BadgeTone.ERROR
             )
         }
 
